@@ -40,34 +40,21 @@ cd brain
 pwsh -NoProfile -File .\setup.ps1            # or: -BrainPath "C:\abs\path\to\brain"
 ```
 
-`setup.ps1` substitutes the `<BRAIN_PATH>` placeholder with this folder's absolute path and installs the
-slash-commands globally (a junction at `~/.claude/commands`). It then prints the remaining manual steps:
+`setup.ps1` is an **interactive wizard**. It walks you through each step — substituting the `<BRAIN_PATH>`
+placeholder, junctioning the slash-commands into `~/.claude/commands`, registering the `SessionEnd` capture
+hook and `autoMemoryEnabled:false` in `~/.claude/settings.json`, and adding the vault pointer to your global
+`~/.claude/CLAUDE.md`. Before it touches anything it **shows the exact change and asks** (`[Y/n/skip]`), and
+it **backs up** every file it edits. It is **idempotent**: re-run it any time — already-done steps report
+`[ok]` and change nothing. Use `-DryRun` to preview the whole run without writing.
 
-1. **Register the capture hook** in `~/.claude/settings.json`:
-   ```json
-   "hooks": {
-     "SessionEnd": [
-       { "hooks": [ { "type": "command", "command": "pwsh -NoProfile -File \"C:\\abs\\path\\to\\brain\\hooks\\capture.ps1\"" } ] }
-     ]
-   }
-   ```
-2. **Disable competing memory** (recommended) in `~/.claude/settings.json`:
-   ```json
-   "autoMemoryEnabled": false
-   ```
-   and disable any claude-mem-style plugin. (This system replaces them, with control + visibility.)
-3. **Add the vault pointer** to your global `~/.claude/CLAUDE.md` so the agent knows the vault exists:
-   ```markdown
-   ## Knowledge Vault
-   A knowledge vault lives at `C:\abs\path\to\brain` (git repo + Obsidian vault); single source of truth
-   for standards, lessons, project state, research.
-   - Before designing/building, consult `brain/standards/` and `brain/lessons/` — grep, don't load wholesale. Use `/recall`.
-   - When I reference another project, grep `brain/projects/`.
-   - Create standards/lessons ONLY when I explicitly say so (`/remember-standard`, `/remember-lesson`).
-   - Consult the vault before answering when I reference past decisions, "how we did X", or another project — you don't need me to type /recall.
-   ```
-4. **Open the folder in Obsidian**, enable the **Dataview** plugin (Settings → Community plugins).
-5. **Restart Claude Code**, then run `/recall test` to confirm the commands load.
+A few things can't be automated and are listed as guided reminders in the closing summary:
+
+- Disable any claude-mem-style **plugin** (a script can't toggle plugins).
+- Open the folder in **Obsidian** and enable the **Dataview** community plugin (Settings → Community plugins).
+- **Restart Claude Code**, then run `/recall test` to confirm the commands load.
+
+The optional AI add-ons (semantic search + Graphify) are offered near the end behind a single Gemini-key
+prompt — skip them and `/recall` still works on the index + grep tiers.
 
 ## Commands
 
