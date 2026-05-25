@@ -8,21 +8,27 @@ function Assert($cond, $msg) {
 $cmd = 'pwsh -NoProfile -File "C:\v\hooks\capture.ps1"'
 
 # adds to empty settings
-$r = Merge-SessionEndHook -Settings @{} -Command $cmd
+$r = Merge-Hook -Settings @{} -EventName 'SessionEnd' -Command $cmd
 Assert ($r.Changed -eq $true) "empty: reports changed"
 Assert ($r.Settings['hooks']['SessionEnd'].Count -eq 1) "empty: one SessionEnd entry"
 Assert ($r.Settings['hooks']['SessionEnd'][0]['hooks'][0]['command'] -eq $cmd) "empty: command stored"
 
 # idempotent: re-merging the same command does not duplicate
-$r2 = Merge-SessionEndHook -Settings $r.Settings -Command $cmd
+$r2 = Merge-Hook -Settings $r.Settings -EventName 'SessionEnd' -Command $cmd
 Assert ($r2.Changed -eq $false) "idempotent: reports unchanged"
 Assert ($r2.Settings['hooks']['SessionEnd'].Count -eq 1) "idempotent: still one entry"
 
 # preserves an unrelated existing hook
 $existing = @{ hooks = @{ SessionEnd = @( @{ hooks = @( @{ type='command'; command='other.ps1' } ) } ) } }
-$r3 = Merge-SessionEndHook -Settings $existing -Command $cmd
+$r3 = Merge-Hook -Settings $existing -EventName 'SessionEnd' -Command $cmd
 Assert ($r3.Changed -eq $true) "preserve: reports changed"
 Assert ($r3.Settings['hooks']['SessionEnd'].Count -eq 2) "preserve: keeps existing + adds ours"
+
+# generic over event name: a second event is independent
+$u = Merge-Hook -Settings $r3.Settings -EventName 'UserPromptSubmit' -Command 'auto.ps1'
+Assert ($u.Changed -eq $true) "event: adds UserPromptSubmit"
+Assert ($u.Settings['hooks']['UserPromptSubmit'].Count -eq 1) "event: one UserPromptSubmit entry"
+Assert ($u.Settings['hooks']['SessionEnd'].Count -eq 2) "event: SessionEnd untouched"
 
 # autoMemoryEnabled: set when absent
 $a = Set-AutoMemoryDisabled -Settings @{}

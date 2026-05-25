@@ -26,6 +26,11 @@ understanding everything else.
 The semantic index is **gitignored and regenerable** (like Graphify output) — it's never the source of
 truth; the markdown is. Rebuild any time with `python -m reindex`.
 
+**Auto-recall (optional, on by default)** makes recall *proactive*: a `UserPromptSubmit` hook injects a tiny
+"possibly relevant notes" hint on substantive prompts — FTS-first (most turns never import the embedder),
+scoped to standards/lessons/decisions, silent when unsure, de-duped per session. Toggle/knobs live in
+`_meta/engram.json`. It draws from the vault only — never code — so it stays complementary to Graphify.
+
 ## 2. Graphify — code structure INSIDE one project
 
 - **What:** a map of one repo's code — classes, functions, imports, call graph — as a queryable graph.

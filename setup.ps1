@@ -105,18 +105,29 @@ try {
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [4/8] SessionEnd capture hook
-Step "[4/8] Register SessionEnd capture hook in settings.json"
+# [4/8] SessionEnd capture hook + UserPromptSubmit auto-recall hook
+Step "[4/8] Register hooks in settings.json (capture + auto-recall)"
 try {
   $settingsPath = Join-Path $ConfigRoot 'settings.json'
   $hookCmd = "pwsh -NoProfile -File ""$BrainPath\hooks\capture.ps1"""
   $settings = Read-Settings $settingsPath
-  $res = Merge-SessionEndHook -Settings $settings -Command $hookCmd
-  if (-not $res.Changed) { Write-Host "  hook already configured [ok]" }
+  $res = Merge-Hook -Settings $settings -EventName 'SessionEnd' -Command $hookCmd
+  if (-not $res.Changed) { Write-Host "  capture hook already configured [ok]" }
   else {
-    Write-Host "  Will add hook command:`n    $hookCmd"
+    Write-Host "  Will add SessionEnd capture hook:`n    $hookCmd"
     if (Confirm-Step "Add to settings.json?") {
       Backup-File $settingsPath; Write-Settings $settingsPath $res.Settings; Write-Host "  applied [ok]"
+    } else { Write-Host "  skipped" }
+  }
+
+  $arCmd = "pwsh -NoProfile -File ""$BrainPath\hooks\autorecall.ps1"""
+  $settings = Read-Settings $settingsPath
+  $resAr = Merge-Hook -Settings $settings -EventName 'UserPromptSubmit' -Command $arCmd
+  if (-not $resAr.Changed) { Write-Host "  auto-recall hook already configured [ok]" }
+  else {
+    Write-Host "  Will add UserPromptSubmit auto-recall hook:`n    $arCmd"
+    if (Confirm-Step "Add auto-recall hook to settings.json?") {
+      Backup-File $settingsPath; Write-Settings $settingsPath $resAr.Settings; Write-Host "  applied [ok]"
     } else { Write-Host "  skipped" }
   }
 } catch { Write-Warning "  step failed: $_" }

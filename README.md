@@ -114,8 +114,8 @@ exact change, asks before touching anything (`[Y/n/skip]`), and backs up any fil
 1. Confirm the vault path.
 2. Substitute the `<BRAIN_PATH>` placeholder with this folder's absolute path.
 3. Junction the slash-commands into `~/.claude/commands`.
-4. Register the `SessionEnd` capture hook in `~/.claude/settings.json` (merged safely — your existing hooks
-   are preserved).
+4. Register two hooks in `~/.claude/settings.json` (merged safely — your existing hooks are preserved): the
+   `SessionEnd` capture hook and the `UserPromptSubmit` **auto-recall** hook (see below).
 5. Set `autoMemoryEnabled: false` in `~/.claude/settings.json`.
 6. Add a vault pointer to your global `~/.claude/CLAUDE.md` (a sentinel-bounded block, replaced in place on
    re-runs — never duplicated).
@@ -186,6 +186,22 @@ detected and refuses a stale index until you reindex.
 > **Semantic search vs Graphify:** complementary, not the same engine. This indexes the vault's **knowledge
 > across projects**; Graphify maps **code structure inside** one repo with its own embedding pass. They
 > share only the `GEMINI_API_KEY` environment variable.
+
+### Auto-recall (proactive `/recall`)
+
+With the semantic index built, a `UserPromptSubmit` hook turns recall **proactive**: on a substantive prompt
+it injects a tiny "possibly relevant notes" hint so you don't have to remember to run `/recall`. It is
+deliberately thrifty and quiet:
+
+- **FTS-first** — a local keyword pass answers most prompts in ~0.3s and **never imports the embedder**;
+  semantic search escalates only when keywords miss nothing strong.
+- **Scoped** to `standards` / `lessons` / `decisions` (the "apply-this" knowledge) — never journals/todos or
+  code; it is **disjoint from Graphify** by design.
+- **Silent when unsure** (a confidence threshold) and **de-duped per session** (a note is never injected
+  twice), so it doesn't drift into the always-on token cost this project rejects.
+
+Toggle and tune it in `_meta/engram.json` (`autoRecall.enabled` / `topN` / `minScore` / `tokenBudget` /
+`scope`); the same file toggles `semantic` and `graphify`. Trivial prompts ("ok", "run it") do nothing.
 
 ## Optional: Graphify (codebase knowledge graph)
 
