@@ -79,6 +79,28 @@ slash-commands globally (a junction at `~/.claude/commands`). It then prints the
 | `/vault-audit` | Lint: orphans, dead links, index drift, frontmatter gaps. |
 | `/logs <focus>` | Investigate Logfire for the current project (if you use Logfire MCP). |
 | `/db <question>` | Query the project's database via a postgres MCP (if configured). |
+| `/onboard-project <path>` | Analyze a repo and add it to the vault (reads a Graphify graph if present). |
+| `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
+| `/archive-project <slug>` | Move a finished project to `archive/`, excluded from recall + dashboards. |
+
+## Optional: Graphify (codebase knowledge graph)
+
+[Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph via
+tree-sitter (code is parsed locally, **0 tokens**; only docs/markdown use an LLM). It pairs well with this
+vault: Graphify maps **code structure inside** a project, the vault holds **knowledge across** projects.
+`/onboard-project` will read a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present.
+
+```powershell
+uv tool install graphifyy --with openai          # 'openai' extra needed for Gemini/OpenAI-compatible backends
+graphify install --platform windows              # registers the /graphify skill + CLAUDE.md directive
+# set an LLM key for the semantic pass, e.g. $env:GEMINI_API_KEY = "..."
+cd C:\path\to\your\repo
+graphify .                                        # build graph.json (AST + semantic)
+graphify cluster-only .                           # regenerate GRAPH_REPORT.md + graph.html (open in browser)
+graphify hook install                             # post-commit/post-checkout auto-rebuild (per repo)
+```
+
+Outputs land in `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`). Query with `/graphify`.
 
 ## Capture hook
 
