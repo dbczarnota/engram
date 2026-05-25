@@ -178,9 +178,9 @@ else {
     # 7a semantic
     if ($hasUv -and (Test-Path "$sem\pyproject.toml")) {
       if (Confirm-Step "Enable semantic search (uv sync + reindex)?") {
-        & uv sync --project $sem | Out-Null
+        & uv sync --directory $sem | Out-Null
         Set-Content -LiteralPath "$sem\.env" -Value "GEMINI_API_KEY=$key" -Encoding UTF8
-        & uv run --project $sem --env-file "$sem\.env" python -m reindex
+        & uv run --directory $sem --env-file "$sem\.env" python -m reindex
         Write-Host "  semantic search ready [ok]"
       }
     } else { Write-Host "  semantic skipped (uv not found or _meta/semantic missing)" }

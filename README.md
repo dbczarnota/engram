@@ -1,36 +1,99 @@
-# brain — a memory & knowledge vault for Claude Code
+# 🧠 brain — a memory & knowledge vault for Claude Code
 
-A lightweight, **plain-markdown + git** memory system that gives Claude Code persistent, *controllable*
-knowledge across all your projects — without burning tokens.
+**A plain-markdown, git-versioned memory system that gives Claude Code persistent, *controllable*
+knowledge across all your projects — without burning context tokens.**
 
 It is also an **Obsidian vault**: open the folder in Obsidian to browse the graph, dashboards, and notes.
-Claude reads the same `.md` files via grep — so you get a visual wiki for humans **and** cheap,
-on-demand recall for the agent, from one source of truth.
+Claude reads the same `.md` files via grep (and, optionally, semantic search) — so you get a visual wiki
+for humans **and** cheap, on-demand recall for the agent, from one source of truth.
 
-## Core principle: automatic WRITE, on-demand READ
+This repository is a **starter template**: clone it, run one wizard, and you have an empty, working brain
+of your own. The example standard and lesson shipped inside are meant to be deleted.
 
-The usual pain with agent memory is automatic *reading* — tools that inject thousands of tokens into
-every session. Here, recall is **on-demand only** (you run `/recall`, or the agent greps when it has a
-reason to). Capture can be automatic (a session-end hook writes a journal entry), because writing a
-markdown file costs no session tokens and is fully visible in a git diff.
+---
 
-## What it gives you
+## Why this exists
 
-- **Standards** (`standards/`) — "how we always do X", applied across projects. No re-litigating decisions.
-- **Lessons** (`lessons/`) — hard-won gotchas, one per tech. Never solve the same problem twice.
-- **Per-project state** (`projects/<slug>/`) — what it is, a `journal.md` of session summaries, and
-  `todos.md` for deferred ideas.
-- **Research** (`research/`) — saved write-ups you reference explicitly.
-- **Dashboards** + **graph** (via Obsidian Dataview) — a browsable picture of your projects and their links.
+Coding agents are stateless between sessions. The common fixes all have the same shape — a background
+service that **reads your memory into every prompt** — and they share the same four problems:
+
+1. **Invisible, oversized token cost.** Auto-injected memory can silently spend thousands of tokens at the
+   top of *every* session. You hit context limits and can't see why.
+2. **Wrong recall.** Vector stores happily surface a completed todo or a stale idea as if it were current.
+3. **No engineering standards.** They remember *facts from conversations*, not *how you build things*. The
+   same architectural decisions get re-litigated and solved five different ways across projects.
+4. **No control, no view.** You can't browse it, audit it, diff it, or correct it. It's an opaque blob.
+
+This project takes the opposite stance on every point.
+
+## The core principle: automatic WRITE, on-demand READ
+
+The pain is almost always on the **read** side — memory that injects itself. So here, **recall is
+on-demand only**: you run `/recall`, or the agent greps the vault when it has a reason to. Nothing is
+auto-injected into your context.
+
+**Writing**, on the other hand, can be automatic, because writing a markdown file costs zero session tokens
+and is fully visible in a `git diff`. A session-end hook appends a short journal entry; you stay in control
+of what becomes a durable *standard* or *lesson* (those are created only when you explicitly ask).
+
+The result: low and **visible** token cost, full auditability (it's just text in git), and knowledge that
+compounds instead of decaying.
+
+## What you get
+
+- **Standards** (`standards/`) — "how we always do X", applied across projects. Decide once, reuse forever.
+- **Lessons** (`lessons/`) — hard-won, tech-specific gotchas. Never debug the same trap twice.
+- **Per-project state** (`projects/<slug>/`) — what the project is, a `journal.md` of session summaries
+  (newest on top), and `todos.md` for deferred ideas. Specs/plans live here too, not in the code repo.
+- **Research** (`research/`) — write-ups and references you cite explicitly.
+- **Dashboards + graph** (Obsidian Dataview) — a browsable picture of projects ↔ standards ↔ lessons.
 - **Archive** (`archive/`) — finished projects, excluded from recall so the active base stays small.
+- **Semantic recall** (optional, `_meta/semantic/`) — concept-level search over the vault, so "how do we
+  authenticate clients" finds a note titled "two-scheme API-key + JWT" even with zero shared keywords.
 
-## Prerequisites
+## How it compares
+
+Honest positioning against other "memory for coding agents" approaches:
+
+| Dimension | **brain (this)** | claude-mem | Mem0 / Zep | Letta / MemGPT | basic-memory (MCP) |
+|---|---|---|---|---|---|
+| Store | **markdown + git** | SQLite + Chroma | hosted / vectors | memory blocks | markdown + SQLite |
+| Read model | **on-demand, visible cost** | auto-injected each session | proactive injection | automatic | MCP query |
+| Control / audit | **full (`git diff`)** | low | low | medium | good |
+| Human view | **Obsidian graph + dashboards** | none | none | none | partial |
+| Cross-project *standards* | **yes (the differentiator)** | no | no (stores facts) | no | no |
+| Automatic memory extraction | **no** (explicit + journal) | yes | yes | yes | partial |
+| Scale / multi-user | personal / solo | small | **strong** | medium | medium |
+| Offline / no service | **yes** | yes | no | depends | yes |
+
+**Where brain wins:** control and auditability (plain text in git), transparent token cost (nothing
+auto-injected), dual human+agent use (the same files power an Obsidian graph), and — the real
+differentiator — distilling **engineering standards and lessons** that apply across projects. Most memory
+tools store conversational facts; almost none capture "how we build things."
+
+**Where brain is weaker (by design or for now):**
+
+- **No automatic memory extraction.** Mem0 and claude-mem mine your conversations for you; brain relies on
+  an explicit `/remember-standard` / `/remember-lesson` plus a session-end journal hook. It rewards a little
+  discipline.
+- **Recall is on-demand, not proactive.** The agent must *choose* to `/recall` or grep. That's the
+  deliberate trade for token control, but if it doesn't reach for the vault, the knowledge isn't used. (The
+  global `CLAUDE.md` pointer nudges it to.)
+- **Windows-first.** The setup wizard and capture hook are PowerShell; macOS/Linux is a short manual port.
+- **Personal scale.** grep + a small semantic index over your markdown is perfect for one person's vault;
+  it is not a multi-user, team-scale memory backend.
+
+**Choose brain if** you're a solo developer working across many projects who wants control, auditability,
+and reusable standards. **Look at Mem0/Zep instead if** you want zero-effort automatic memory or
+team-scale, multi-user shared memory.
+
+## Requirements
 
 - [Claude Code](https://code.claude.com)
-- PowerShell 7+ (`pwsh`) — for the setup script and the capture hook (Windows-first; see Non-Windows below)
+- PowerShell 7+ (`pwsh`) — for the setup wizard and the capture hook (Windows-first; see *Non-Windows*)
 - git
 - [Obsidian](https://obsidian.md) (optional, for the graph/dashboards) + its **Dataview** community plugin
-- [uv](https://docs.astral.sh/uv/) + a Gemini API key (optional, only for semantic `/recall` — see below)
+- [uv](https://docs.astral.sh/uv/) + a Gemini API key (optional, only for semantic `/recall`)
 
 ## Quick start
 
@@ -40,32 +103,55 @@ cd brain
 pwsh -NoProfile -File .\setup.ps1            # or: -BrainPath "C:\abs\path\to\brain"
 ```
 
-`setup.ps1` is an **interactive wizard**. It walks you through each step — substituting the `<BRAIN_PATH>`
-placeholder, junctioning the slash-commands into `~/.claude/commands`, registering the `SessionEnd` capture
-hook and `autoMemoryEnabled:false` in `~/.claude/settings.json`, and adding the vault pointer to your global
-`~/.claude/CLAUDE.md`. Before it touches anything it **shows the exact change and asks** (`[Y/n/skip]`), and
-it **backs up** every file it edits. It is **idempotent**: re-run it any time — already-done steps report
-`[ok]` and change nothing. Use `-DryRun` to preview the whole run without writing.
+`setup.ps1` is an **interactive wizard**. It walks you through every step, and for each one it **shows the
+exact change, asks before touching anything (`[Y/n/skip]`), and backs up any file it edits**:
 
-A few things can't be automated and are listed as guided reminders in the closing summary:
+1. Confirm the vault path.
+2. Substitute the `<BRAIN_PATH>` placeholder with this folder's absolute path.
+3. Junction the slash-commands into `~/.claude/commands`.
+4. Register the `SessionEnd` capture hook in `~/.claude/settings.json` (merged safely — your existing hooks
+   are preserved).
+5. Set `autoMemoryEnabled: false` in `~/.claude/settings.json`.
+6. Add a vault pointer to your global `~/.claude/CLAUDE.md` (a sentinel-bounded block, replaced in place on
+   re-runs — never duplicated).
+7. Optionally set up the AI add-ons (semantic search + Graphify) behind a single Gemini-key prompt.
+
+It is **idempotent**: re-run it any time — already-done steps report `[ok]` and change nothing. Use
+**`-DryRun`** to preview the entire run without writing a single file.
+
+A few things a script genuinely can't do are listed as **guided reminders** in the closing summary:
 
 - Disable any claude-mem-style **plugin** (a script can't toggle plugins).
-- Open the folder in **Obsidian** and enable the **Dataview** community plugin (Settings → Community plugins).
-- **Restart Claude Code**, then run `/recall test` to confirm the commands load.
+- Open the folder in **Obsidian** and enable the **Dataview** community plugin.
+- **Restart Claude Code**, then run `/recall test` to confirm the commands loaded.
 
-The optional AI add-ons (semantic search + Graphify) are offered near the end behind a single Gemini-key
-prompt — skip them and `/recall` still works on the index + grep tiers.
+## Testing it
+
+The wizard's logic (safe JSON merge, the `CLAUDE.md` block, junction detection) is covered by standalone
+PowerShell tests, and a dry run exercises the whole flow without writing anything:
+
+```powershell
+# unit tests — each prints "all passed"
+pwsh -NoProfile -File .\setup.merge.test.ps1
+pwsh -NoProfile -File .\setup.pointer.test.ps1
+pwsh -NoProfile -File .\setup.junction.test.ps1
+
+# full wizard, zero writes (point it at a throwaway config root)
+pwsh -NoProfile -File .\setup.ps1 -DryRun -ConfigRoot "$env:TEMP\brain-dryrun"
+```
+
+If you enabled semantic search, its Python package has its own suite: `uv run --directory _meta\semantic pytest`.
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `/recall <query>` | Tiered recall: reads `_meta/index.md` first, then an optional semantic tier, then drills into matching pages only. Works grep-only if semantic search isn't set up. |
+| `/recall <query>` | Tiered recall: `_meta/index.md` first, then an optional semantic tier, then drills into matching pages. Falls back to grep if semantic search isn't set up. |
 | `/checkpoint` | Summarize the current session into the active project's `journal.md` + capture todos. |
-| `/remember-standard <topic>` | Record a cross-project standard (explicit). Flags conflicts, never silent-overwrites. |
+| `/remember-standard <topic>` | Record a cross-project standard (explicit). Flags conflicts; never silent-overwrites. |
 | `/remember-lesson <tech>` | Record a hard-won lesson. |
 | `/vault-audit` | Lint: orphans, dead links, index drift, frontmatter gaps. |
-| `/logs <focus>` | Investigate Logfire for the current project (if you use Logfire MCP). |
+| `/logs <focus>` | Investigate Logfire for the current project (if you use the Logfire MCP). |
 | `/db <question>` | Query the project's database via a postgres MCP (if configured). |
 | `/onboard-project <path>` | Analyze a repo and add it to the vault (reads a Graphify graph if present). |
 | `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
@@ -74,35 +160,34 @@ prompt — skip them and `/recall` still works on the index + grep tiers.
 ## Optional: Semantic search (concept-level `/recall`)
 
 A small, self-contained semantic index over the vault's markdown lives in `_meta/semantic/`. It lets
-`/recall` find notes by *meaning*, not just keywords (e.g. "how do we authenticate clients" finds a note
-titled "two-scheme X-API-Key + Kinde JWT"). It's **optional**: without it, `/recall` falls back to the
-index + grep tiers.
+`/recall` find notes by *meaning*, not just keywords. It's optional — without it, `/recall` uses the index
++ grep tiers.
 
 How it works: markdown is chunked by heading, embedded with **Gemini** (behind a swappable `Embedder`
 Protocol — point it at Voyage/Jina later), stored in **`sqlite-vec` + FTS5**, and queried as a hybrid
-(vector + keyword) fused with Reciprocal Rank Fusion. The index is gitignored and regenerable — never a
-source of truth.
+(vector + keyword) fused with Reciprocal Rank Fusion. The index is gitignored and regenerable — the
+markdown is always the source of truth.
 
 ```powershell
 cd _meta\semantic
 copy .env.example .env          # then put your key in it (GEMINI_API_KEY=...)
-uv run --env-file .env python -m reindex   # build the index (also re-run after big edits)
+uv run --env-file .env python -m reindex   # build the index (re-run after big edits)
 ```
 
 Re-embedding is cached by content hash, so re-runs only embed changed chunks. To swap providers, implement
-another `Embedder` in `embedder.py` and select it via `BRAIN_EMBED_PROVIDER`; a provider/dimension change
-is detected and refuses a stale index until you reindex. Tests: `uv run pytest`.
+another `Embedder` in `embedder.py` and select it via `BRAIN_EMBED_PROVIDER`; a provider/dimension change is
+detected and refuses a stale index until you reindex.
 
-> **Semantic search vs Graphify (below):** complementary, not the same engine. This indexes the vault's
-> **knowledge across projects**; Graphify maps **code structure inside** one repo with its own embedding
-> pass. They share only the `GEMINI_API_KEY` env var.
+> **Semantic search vs Graphify:** complementary, not the same engine. This indexes the vault's **knowledge
+> across projects**; Graphify maps **code structure inside** one repo with its own embedding pass. They
+> share only the `GEMINI_API_KEY` environment variable.
 
 ## Optional: Graphify (codebase knowledge graph)
 
 [Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph via
 tree-sitter (code is parsed locally, **0 tokens**; only docs/markdown use an LLM). It pairs well with this
 vault: Graphify maps **code structure inside** a project, the vault holds **knowledge across** projects.
-`/onboard-project` will read a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present.
+`/onboard-project` reads a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present.
 
 ```powershell
 uv tool install graphifyy --with openai          # 'openai' extra needed for Gemini/OpenAI-compatible backends
@@ -114,21 +199,27 @@ graphify cluster-only .                           # regenerate GRAPH_REPORT.md +
 graphify hook install                             # post-commit/post-checkout auto-rebuild (per repo)
 ```
 
-Outputs land in `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`). Query with `/graphify`.
+See `HOW-IT-WORKS.md` for the full mental model of how the vault and Graphify divide responsibilities.
 
 ## Capture hook
 
 `hooks/capture.ps1` runs at session end. If your current directory maps to a project in
 `_meta/project-map.json`, it asks the (already-loaded) model to write a short journal entry. It honours a
-`BRAIN_HOME` env var for testing and is best-effort — it never blocks session end. If your host doesn't
-fire `SessionEnd` reliably, just use `/checkpoint` manually. Run `hooks/capture.test.ps1` and
+`BRAIN_HOME` env var for testing and is best-effort — it never blocks session end. If your host doesn't fire
+`SessionEnd` reliably, just use `/checkpoint` manually. Run `hooks/capture.test.ps1` and
 `hooks/capture.integration.test.ps1` to verify the script.
 
 ## Structure
 
 ```
+LICENSE              MIT
+README.md            this file
+HOW-IT-WORKS.md      the mental model (brain vs Graphify; how recall works)
 CLAUDE.md            router for the agent when working inside the vault
 Home.md              human landing page (open in Obsidian)
+setup.ps1            the interactive install wizard
+setup.lib.ps1        pure functions behind the wizard (unit-tested)
+setup.*.test.ps1     wizard unit tests
 _meta/               conventions, templates, recall index, project-map
 _meta/semantic/      optional semantic-search index (Gemini + sqlite-vec); gitignored .env/.index
 commands/            the slash-commands (junctioned to ~/.claude/commands)
@@ -139,11 +230,22 @@ standards/  lessons/  research/  projects/  archive/  dashboards/
 ## Non-Windows
 
 The setup uses a Windows directory **junction** and a **PowerShell** hook. On macOS/Linux: replace the
-junction with a symlink (`ln -s "$PWD/commands" ~/.claude/commands`) and port `hooks/capture.ps1` to a
-shell script (the logic is ~30 lines). The vault content itself is OS-agnostic markdown.
+junction with a symlink (`ln -s "$PWD/commands" ~/.claude/commands`), do the `settings.json` / `CLAUDE.md`
+edits by hand (or port `setup.lib.ps1` — the logic is small), and port `hooks/capture.ps1` to a shell
+script (~30 lines). The vault content and the semantic-search Python are OS-agnostic.
 
 ## Philosophy & credit
 
-Distilled from real day-to-day use: markdown+git for control and auditability, Obsidian as the human
-viewer, on-demand recall to keep token cost low and visible. Bring your own standards and lessons —
-the shipped `standards/commit-messages.md` and `lessons/example-tool.md` are examples to delete.
+Distilled from real day-to-day use: markdown + git for control and auditability, Obsidian as the human
+viewer, on-demand recall to keep token cost low and visible. Bring your own standards and lessons — the
+shipped `standards/commit-messages.md` and `lessons/example-tool.md` are examples to delete.
+
+## Contributing
+
+Issues and PRs welcome. Keep the spirit: plain text, visible token cost, nothing auto-injected, the user
+stays in control. If you port the setup/hook to macOS/Linux, a `setup.sh` + `capture.sh` pair would be a
+very welcome contribution.
+
+## License
+
+[MIT](LICENSE) © 2026 Dominik Czarnota.

@@ -11,7 +11,7 @@ try {
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
 
-  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "C:\Users\czarn\Documents\A_PYTHON\brain" }
+  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
 
   # Heartbeat: unconditional proof the hook fired (debug whether the host fires SessionEnd at all).
   try {

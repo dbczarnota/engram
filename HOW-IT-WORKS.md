@@ -11,6 +11,21 @@ understanding everything else.
 - **This is the thing you back up and version.** If your computer dies, `git clone` restores all your
   cross-project knowledge.
 
+## How recall works (grep first, semantics optional)
+
+`/recall` is **tiered** to keep token cost low and visible:
+
+1. **Index tier** — read `_meta/index.md` (a one-line-per-page table of contents) and the headings of
+   `standards/` + `dashboards/`. Cheap, almost always enough to know *which* page to open.
+2. **Semantic tier (optional)** — if you set up `_meta/semantic/`, the query is embedded and matched by
+   *meaning* against the vault's markdown (chunked by heading, stored in `sqlite-vec` + FTS5, fused with
+   Reciprocal Rank Fusion). This catches paraphrases that share no keywords with the note. Without it,
+   `/recall` simply falls back to grep.
+3. **Read tier** — only the matched pages are read in full.
+
+The semantic index is **gitignored and regenerable** (like Graphify output) — it's never the source of
+truth; the markdown is. Rebuild any time with `python -m reindex`.
+
 ## 2. Graphify — code structure INSIDE one project
 
 - **What:** a map of one repo's code — classes, functions, imports, call graph — as a queryable graph.
