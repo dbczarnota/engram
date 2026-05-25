@@ -16,7 +16,7 @@ This vault is the single source of truth for cross-project knowledge. It is read
 
 ## Folders
 - `projects/<slug>/` — one folder per project: `<slug>.md` (what/stack/status), `journal.md`
-  (session summaries, newest on top), `todos.md` (deferred todos & ideas), `decisions/` (ADRs).
+  (session summaries, newest on top), `todos.md` (deferred todos & ideas), `specs/` + `plans/` (superpowers design docs — kept here, NOT in the project repo), `decisions/` (ADRs).
 - `standards/` — cross-project rules ("how we always do X"). Living documents.
 - `lessons/` — cross-project gotchas, one file per tech. Never solve the same problem twice.
 - `research/` — saved research outputs / papers, referenced explicitly.

@@ -12,7 +12,7 @@ Target: $ARGUMENTS (default: current working directory).
 3. Create `projects/<slug>/<slug>.md` from `_meta/templates/project.md`: what it is, stack, status,
    build/test/lint commands, and observability coordinates (logfire project / db — **names only, never
    secrets**).
-4. Create empty `projects/<slug>/journal.md` and `projects/<slug>/todos.md`.
+4. Create empty `projects/<slug>/journal.md`, `projects/<slug>/todos.md`, and `specs/` + `plans/` folders.
 5. Add the repo path → slug mapping to `_meta/project-map.json` (so the capture hook recognizes it).
 6. Propose CANDIDATE standards and lessons you noticed (patterns reused across projects, gotchas) as a
    numbered list for my explicit approval. **Do NOT write to `standards/` or `lessons/` without my OK.**
