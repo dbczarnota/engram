@@ -13,7 +13,9 @@ Target: $ARGUMENTS (default: current working directory).
    step.** `graphify .` **hard-fails without an LLM key**, so first make `GEMINI_API_KEY` available (export it
    from `_meta/semantic/.env` if present). **If no key is found anywhere, tell the user plainly that the
    Graphify graph was skipped for lack of `GEMINI_API_KEY`** (set it and re-run `/onboard-project`) and grep
-   the repo instead — never run `graphify .` keyless. With a key: run `graphify .`, then
+   the repo instead — never run `graphify .` keyless. With a key: first copy the vault's code-only
+   `.graphifyignore` into the repo (so the graph excludes docs/images and matches what the commit hook
+   rebuilds — otherwise `graphify update .` diverges from the build), then run `graphify .`, then
    `graphify cluster-only .`, then install the auto-rebuild hook with
    `pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-graphify-hook.ps1'; Install-GraphifyHook -RepoPath ."`
    (use **this**, not `graphify hook install` — the upstream hook silently no-ops on uv-tool/Windows installs),
