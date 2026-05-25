@@ -31,11 +31,15 @@ service that **reads your memory into every prompt** — and they share the same
 
 This project takes the opposite stance on every point.
 
-## The core principle: automatic WRITE, on-demand READ
+## The core principle: visible reads, automatic writes
 
-The pain is almost always on the **read** side — memory that injects itself. So here, **recall is
-on-demand only**: you run `/recall`, or the agent greps the vault when it has a reason to. Nothing is
-auto-injected into your context.
+The pain with agent memory is almost always on the **read** side — memory that injects itself *invisibly and
+unconditionally* into every prompt. Engram's reads are **visible and bounded** instead:
+
+- **On-demand by default** — you run `/recall`, or the agent greps the vault when it has a reason to.
+- **Optional proactive auto-recall** — a `UserPromptSubmit` hook can surface a *tiny* hint (≤ ~200 tokens,
+  only on substantive prompts, only when confident, de-duped per session, shown in the transcript). It's the
+  deliberate opposite of a silent multi-thousand-token dump, and you can turn it off in `_meta/engram.json`.
 
 **Writing**, on the other hand, can be automatic, because writing a markdown file costs zero session tokens
 and is fully visible in a `git diff`. A session-end hook appends a short journal entry; you stay in control
@@ -55,6 +59,9 @@ compounds instead of decaying.
 - **Archive** (`archive/`) — finished projects, excluded from recall so the active base stays small.
 - **Semantic recall** (optional, `_meta/semantic/`) — concept-level search over the vault, so "how do we
   authenticate clients" finds a note titled "two-scheme API-key + JWT" even with zero shared keywords.
+- **Auto-recall** (optional, on by default) — a proactive hook that surfaces a small "possibly relevant
+  notes" hint on substantive prompts (scoped to standards/lessons/decisions), bounded and silent when
+  unsure; toggle/tune in `_meta/engram.json`.
 
 ## How it compares
 
@@ -63,7 +70,7 @@ Honest positioning against other "memory for coding agents" approaches:
 | Dimension | **Engram (this)** | claude-mem | Mem0 / Zep | Letta / MemGPT | basic-memory (MCP) |
 |---|---|---|---|---|---|
 | Store | **markdown + git** | SQLite + Chroma | hosted / vectors | memory blocks | markdown + SQLite |
-| Read model | **on-demand, visible cost** | auto-injected each session | proactive injection | automatic | MCP query |
+| Read model | **on-demand + bounded proactive hint** | auto-injected each session | proactive injection | automatic | MCP query |
 | Control / audit | **full (`git diff`)** | low | low | medium | good |
 | Human view | **Obsidian graph + dashboards** | none | none | none | partial |
 | Cross-project *standards* | **yes (the differentiator)** | no | no (stores facts) | no | no |
@@ -78,12 +85,12 @@ tools store conversational facts; almost none capture "how we build things."
 
 **Where Engram is weaker (by design or for now):**
 
-- **No automatic memory extraction.** Mem0 and claude-mem mine your conversations for you; brain relies on
+- **No automatic memory extraction.** Mem0 and claude-mem mine your conversations for you; Engram relies on
   an explicit `/remember-standard` / `/remember-lesson` plus a session-end journal hook. It rewards a little
   discipline.
-- **Recall is on-demand, not proactive.** The agent must *choose* to `/recall` or grep. That's the
-  deliberate trade for token control, but if it doesn't reach for the vault, the knowledge isn't used. (The
-  global `CLAUDE.md` pointer nudges it to.)
+- **Auto-recall is young.** The proactive hint is v1 and unbenchmarked: its relevance threshold (`minScore`)
+  may need per-vault tuning, and raw retrieval quality is mid-pack (contextual-retrieval blurbs and late
+  chunking are deliberately deferred).
 - **Windows-first.** The setup wizard and capture hook are PowerShell; macOS/Linux is a short manual port.
 - **Personal scale.** grep + a small semantic index over your markdown is perfect for one person's vault;
   it is not a multi-user, team-scale memory backend.
@@ -244,9 +251,10 @@ setup.ps1            the interactive install wizard
 setup.lib.ps1        pure functions behind the wizard (unit-tested)
 setup.*.test.ps1     wizard unit tests
 _meta/               conventions, templates, recall index, project-map
+_meta/engram.json    feature toggles + knobs (semantic, auto-recall)
 _meta/semantic/      optional semantic-search index (Gemini + sqlite-vec); gitignored .env/.index
 commands/            the slash-commands (junctioned to ~/.claude/commands)
-hooks/               session-end capture hook + tests
+hooks/               SessionEnd capture + UserPromptSubmit auto-recall hooks (+ tests)
 standards/  lessons/  research/  projects/  archive/  dashboards/
 ```
 
