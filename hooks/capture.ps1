@@ -3,6 +3,7 @@
 # Reads hook JSON from stdin: { cwd, transcript_path, session_id, ... }.
 # Best-effort: any failure exits 0 so it never blocks session end.
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\capture.lib.ps1"
 try {
   # Recursion guard: the `claude -p` call below spawns a sub-session whose own SessionEnd
   # re-invokes this hook. If we're already inside a capture, no-op immediately.
@@ -38,20 +39,49 @@ try {
   $journal = "$brain\projects\$slug\journal.md"
   if (-not (Test-Path $journal)) { exit 0 }
 
+  # Diagnostic log: record each decision point so a real session end is observable.
+  $logf = "$brain\hooks\capture.log"
+  $log = { param($m) try { Add-Content -Path $logf -Value ("{0}  {1}" -f (Get-Date -Format s), $m) } catch {} }
+
   # Condense the transcript and summarize via headless claude.
-  if (-not $hook.transcript_path -or -not (Test-Path $hook.transcript_path)) { exit 0 }
-  $lines = Get-Content $hook.transcript_path -Tail 400
+  if (-not $hook.transcript_path -or -not (Test-Path $hook.transcript_path)) { & $log "bail: no transcript ($slug)"; exit 0 }
+  # Digest the transcript to a small text excerpt. Piping the raw tail can be megabytes of
+  # tool-result JSON, which stalls `claude -p` past the SessionEnd hook timeout (root cause of
+  # earlier silent failures).
+  $convo = Get-CondensedTranscript -Path $hook.transcript_path
+  if (-not $convo) { & $log "bail: empty digest ($slug)"; exit 0 }
+  & $log ("digest slug={0} chars={1}" -f $slug, $convo.Length)
   $prompt = "You are writing a project journal entry. Summarize the session transcript piped to you into 3-6 terse bullets covering decisions, changes, what's in progress, and TODOs/blockers. Output ONLY the bullets (each starting with '- '), no preamble or heading."
   $env:BRAIN_CAPTURE_ACTIVE = "1"   # nested session's SessionEnd hook no-ops (see guard above)
-  $summary = (($lines -join "`n") | claude -p $prompt 2>$null) -join "`n"
+  $summary = ($convo | claude -p $prompt 2>$null) -join "`n"
   # strip any stray CLI warning that may leak into stdout, then bail if empty
   $summary = ($summary -replace '(?m)^\s*Warning: no stdin data received.*$', '').Trim()
-  if (-not $summary) { exit 0 }
+  if (-not $summary) { & $log "bail: empty summary ($slug)"; exit 0 }
 
   $date = Get-Date -Format "yyyy-MM-dd HH:mm"
   $entry = "## $date - session $($hook.session_id)`n$summary`n`n"
   $existing = if (Test-Path $journal) { Get-Content $journal -Raw } else { "" }
   Set-Content -Path $journal -Value ($entry + $existing) -Encoding utf8
+  & $log ("wrote journal entry: $slug (session $($hook.session_id))")
+
+  # Auto-reindex the semantic index so it tracks the vault (the journal entry just written, plus any
+  # edits this session made, land before the next auto-recall). Best-effort; honors the semantic
+  # toggle and no-ops if the index module or uv isn't present. Content-hash cache keeps it cheap.
+  try {
+    $sem = "$brain\_meta\semantic"
+    $semOn = $true
+    if (Test-Path "$brain\_meta\engram.json") {
+      $cfg = Get-Content "$brain\_meta\engram.json" -Raw | ConvertFrom-Json
+      if ($cfg.semantic -and $cfg.semantic.enabled -eq $false) { $semOn = $false }
+    }
+    if ($semOn -and (Test-Path "$sem\reindex.py") -and (Get-Command uv -ErrorAction SilentlyContinue)) {
+      $runArgs = @('run', '--directory', $sem)
+      if (Test-Path "$sem\.env") { $runArgs += @('--env-file', "$sem\.env") }
+      $runArgs += @('python', '-m', 'reindex')
+      $r = (& uv @runArgs 2>$null) -join "`n"
+      & $log ("reindex: $r")
+    }
+  } catch { & $log "reindex error: $($_.Exception.Message)" }
   exit 0
 } catch {
   exit 0   # never block session end

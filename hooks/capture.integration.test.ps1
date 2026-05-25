@@ -18,8 +18,12 @@ try {
   (@{ $cwd = $proj } | ConvertTo-Json) | Set-Content "$tmp\_meta\project-map.json" -Encoding utf8
   "# Journal`n" | Set-Content "$tmp\projects\$proj\journal.md" -Encoding utf8
 
-  # fake transcript
-  "line one`nline two" | Set-Content "$tmp\transcript.jsonl" -Encoding utf8
+  # fake transcript: realistic JSONL (the condenser parses these; plain text would be skipped)
+  $tlines = @(
+    (@{ type = "user";      message = @{ role = "user";      content = "add a retry helper" } } | ConvertTo-Json -Compress -Depth 6)
+    (@{ type = "assistant"; message = @{ role = "assistant"; content = @(@{ type = "text"; text = "Added retryOperation with 3 attempts." }) } } | ConvertTo-Json -Compress -Depth 6)
+  )
+  Set-Content -Path "$tmp\transcript.jsonl" -Value $tlines -Encoding utf8
 
   # fake `claude` shim that ignores stdin and prints a canned summary
   "@echo off`r`necho - integration summary bullet" | Set-Content "$tmp\bin\claude.cmd" -Encoding ascii
