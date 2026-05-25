@@ -12,6 +12,9 @@ Thumbs.db
 # hook runtime log (proof-of-fire heartbeat)
 hooks/hook-fired.log
 
+# Graphify code-structure graph (regenerable from code; knowledge lives in brain)
+graphify-out/
+
 # semantic search (optional) — secrets, regenerable index + uv env
 _meta/semantic/.env
 _meta/semantic/.index/
