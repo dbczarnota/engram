@@ -1,0 +1,13 @@
+# Obsidian: keep config & community-plugin list, ignore volatile per-machine state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/plugins/
+.trash/
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+
+# hook runtime log (proof-of-fire heartbeat)
+hooks/hook-fired.log
