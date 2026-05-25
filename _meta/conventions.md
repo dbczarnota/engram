@@ -10,9 +10,11 @@ date: 2026-05-25
 This vault is the single source of truth for cross-project knowledge. It is read by Claude Code
 **on demand** (grep/Read) — nothing here is auto-injected into sessions.
 
-## Core principle: automatic WRITE, on-demand READ
+## Core principle: automatic WRITE, visible on-demand READ
 - Capture (journals, todos) may be written semi-automatically.
-- Recall is always explicit (`/recall`) or via the pointer in global `~/.claude/CLAUDE.md`.
+- Recall is on-demand by default (`/recall`, grep, or the pointer in global `~/.claude/CLAUDE.md`).
+- Optional **auto-recall** adds a *bounded, visible* proactive hint (toggle/knobs in `_meta/engram.json`) —
+  it never silently injects large context.
 
 ## Folders
 - `projects/<slug>/` — one folder per project: `<slug>.md` (what/stack/status), `journal.md`

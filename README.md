@@ -17,19 +17,47 @@ vault of your own. The example standard and lesson shipped inside are meant to b
 
 ---
 
-## Why this exists
+## Why I built this — and what I hit with claude-mem + Auto-Memory
 
-Coding agents are stateless between sessions. The common fixes all have the same shape — a background
-service that **reads your memory into every prompt** — and they share the same four problems:
+I didn't set out to build a memory system. I was using **claude-mem** alongside Claude Code's built-in
+**Auto-Memory**, and after a few weeks of real work across several projects, the same four problems kept
+biting me:
 
-1. **Invisible, oversized token cost.** Auto-injected memory can silently spend thousands of tokens at the
-   top of *every* session. You hit context limits and can't see why.
-2. **Wrong recall.** Vector stores happily surface a completed todo or a stale idea as if it were current.
-3. **No engineering standards.** They remember *facts from conversations*, not *how you build things*. The
-   same architectural decisions get re-litigated and solved five different ways across projects.
-4. **No control, no view.** You can't browse it, audit it, diff it, or correct it. It's an opaque blob.
+1. **I couldn't see where my tokens went.** Auto-memory injected a few thousand tokens of "observation
+   timeline" at the top of *every* session. I was hitting context limits and had no visibility into — or
+   control over — what was being spent before I'd typed a word.
+2. **It recalled the wrong things.** It would resurface a *completed* todo or an abandoned idea as if it
+   were still live, then I'd waste turns correcting the agent's assumptions.
+3. **It remembered chatter, not how I build.** It stored facts from conversations, but never *"this is how
+   we do auth"* or *"this is the trap we hit with that library."* So across projects the same architectural
+   decisions got re-litigated and solved five different ways.
+4. **It was an opaque blob.** I couldn't open it, browse it, diff it, audit it, or fix a wrong memory by
+   hand. I had to trust it, and it hadn't earned that.
 
-This project takes the opposite stance on every point.
+The breaking point was my workflow. I work in a spec → plan → implement loop that produces a lot of design
+docs, and **none of their conclusions were turning into anything reusable.** My memory tool was spending my
+context budget to remind me of stale todos while quietly losing the one thing actually worth keeping: the
+decisions.
+
+**What I actually wanted:**
+
+- An agent that **knows what I'm doing across projects** — and understands me when I say *"let's build this
+  the way we did it in the twins."*
+- A real **wiki I can open and browse** — a picture of my projects and how they connect, not a black box.
+- **Deferred todos and mid-project ideas**, tracked and linked to the project they came from.
+- **Lessons learned that stick**, so I never debug the same trap twice.
+- **Standards the agent actually applies** — if we build agents a certain way in one project, we do it the
+  same way in the next, instead of re-deciding it five different ways.
+- To **not** have to memorize every conversation — just the conclusions worth keeping.
+- **Low, visible token cost** — stop re-planning and re-speccing the same thing, and stop hitting limits
+  because something invisible ate my context.
+- A sense of **control** — plain text I can see, diff, and correct.
+- And, because I use the **superpowers** spec/plan workflow: a way to **distill those specs and plans into
+  standards**, so the time I spend designing pays off more than once.
+
+So I made a deliberate bet — the opposite stance on every problem above: **plain markdown + git, read
+on-demand and visibly, written cheaply and automatically.** A memory I can open in Obsidian, diff in `git`,
+correct by hand, and that captures *standards and lessons*, not transcripts. That bet is Engram.
 
 ## The core principle: visible reads, automatic writes
 
