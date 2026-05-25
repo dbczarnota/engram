@@ -41,14 +41,12 @@ try {
   # Condense the transcript and summarize via headless claude.
   if (-not $hook.transcript_path -or -not (Test-Path $hook.transcript_path)) { exit 0 }
   $lines = Get-Content $hook.transcript_path -Tail 400
-  $prompt = @"
-Summarize this Claude Code session for a project journal. Output 5-10 terse bullets:
-decisions made, what changed, what's in progress, blockers. No preamble. If nothing
-substantive happened, output exactly: SKIP
-"@
-  $env:BRAIN_CAPTURE_ACTIVE = "1"   # mark so the nested session's SessionEnd hook no-ops (see guard above)
-  $summary = ($lines -join "`n") | claude -p $prompt 2>$null
-  if (-not $summary -or $summary.Trim() -eq "SKIP") { exit 0 }
+  $prompt = "You are writing a project journal entry. Summarize the session transcript piped to you into 3-6 terse bullets covering decisions, changes, what's in progress, and TODOs/blockers. Output ONLY the bullets (each starting with '- '), no preamble or heading."
+  $env:BRAIN_CAPTURE_ACTIVE = "1"   # nested session's SessionEnd hook no-ops (see guard above)
+  $summary = (($lines -join "`n") | claude -p $prompt 2>$null) -join "`n"
+  # strip any stray CLI warning that may leak into stdout, then bail if empty
+  $summary = ($summary -replace '(?m)^\s*Warning: no stdin data received.*$', '').Trim()
+  if (-not $summary) { exit 0 }
 
   $date = Get-Date -Format "yyyy-MM-dd HH:mm"
   $entry = "## $date - session $($hook.session_id)`n$summary`n`n"
