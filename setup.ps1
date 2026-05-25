@@ -176,41 +176,39 @@ A knowledge vault lives at `{0}` (git repo + Obsidian vault); single source of t
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [7/8] Optional AI add-ons (semantic + Graphify), shared Gemini key
-Step "[7/8] Optional AI add-ons (semantic search + Graphify)"
+# [7/8] Optional AI add-ons: Graphify (no key) + semantic search (needs a Gemini key)
+Step "[7/8] Optional AI add-ons (Graphify + semantic search)"
 $hasUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
 if ($DryRun) { Write-Host "  (dry-run: skipping optional add-ons)" }
-elseif (-not (Confirm-Step "Set up AI add-ons now (needs a Gemini API key)?")) { Write-Host "  skipped" }
+elseif (-not $hasUv) { Write-Host "  skipped (uv not found)" }
 else {
-  $key = Read-Host "  Paste your Gemini API key (blank to skip)"
-  if (-not $key) { Write-Host "  no key - skipping add-ons" }
-  else {
-    $sem = "$BrainPath\_meta\semantic"
-    # 7a semantic
-    if ($hasUv -and (Test-Path "$sem\pyproject.toml")) {
-      if (Confirm-Step "Enable semantic search (uv sync + reindex)?") {
+  $sem = "$BrainPath\_meta\semantic"
+  # 7a Graphify — code-only knowledge graph. No API key needed: onboard + the commit hook use
+  # `graphify update .` (AST-only). A `.graphifyignore` keeps it code-only so build == hook.
+  if (Confirm-Step "Install Graphify (code knowledge graph, no API key needed)?") {
+    & uv tool install graphifyy --with openai
+    & graphify install --platform windows
+    # Record the opt-in so /onboard-project auto-builds graphs for new repos (no manual init).
+    $cfgPath = "$BrainPath\_meta\engram.json"
+    if (Test-Path $cfgPath) {
+      ((Get-Content $cfgPath -Raw) -replace '("graphify":\s*\{\s*"enabled":\s*)false', '${1}true') |
+        Set-Content -LiteralPath $cfgPath -Encoding UTF8
+    }
+    $script:manual += "Graphify: graphs build automatically (code-only, no API key) when you run /onboard-project on a repo."
+    Write-Host "  Graphify installed [ok]"
+  }
+  # 7b Semantic search — needs a Gemini API key (it embeds the markdown vault).
+  if (Test-Path "$sem\pyproject.toml") {
+    if (Confirm-Step "Enable semantic search (needs a Gemini API key)?") {
+      $key = Read-Host "  Paste your Gemini API key (blank to skip)"
+      if ($key) {
         & uv sync --directory $sem | Out-Null
         Set-Content -LiteralPath "$sem\.env" -Value "GEMINI_API_KEY=$key" -Encoding UTF8
         & uv run --directory $sem --env-file "$sem\.env" python -m reindex
         Write-Host "  semantic search ready [ok]"
-      }
-    } else { Write-Host "  semantic skipped (uv not found or _meta/semantic missing)" }
-    # 7b Graphify
-    if ($hasUv) {
-      if (Confirm-Step "Install Graphify (codebase knowledge graph)?") {
-        & uv tool install graphifyy --with openai
-        & graphify install --platform windows
-        # Record the opt-in so /onboard-project auto-builds graphs for new repos (no manual init).
-        $cfgPath = "$BrainPath\_meta\engram.json"
-        if (Test-Path $cfgPath) {
-          ((Get-Content $cfgPath -Raw) -replace '("graphify":\s*\{\s*"enabled":\s*)false', '${1}true') |
-            Set-Content -LiteralPath $cfgPath -Encoding UTF8
-        }
-        $script:manual += "Graphify: set GEMINI_API_KEY in your environment. Graphs then build automatically when you run /onboard-project on a repo; to graph one by hand, run 'graphify .' then 'graphify hook install' inside it."
-        Write-Host "  Graphify installed [ok]"
-      }
-    } else { Write-Host "  Graphify skipped (uv not found)" }
-  }
+      } else { Write-Host "  semantic skipped (no key)" }
+    }
+  } else { Write-Host "  semantic skipped (_meta/semantic missing)" }
 }
 
 # [8/8] Guided manual steps

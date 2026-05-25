@@ -8,18 +8,15 @@ Target: $ARGUMENTS (default: current working directory).
 1. Resolve the repo root and pick a kebab-case slug.
 2. Analyze the repo: README, package manifests (pyproject/package.json), top-level structure, its own
    CLAUDE.md if any, recent `git log`.
-   **Graphify (auto):** if `graphify.enabled` is true in `_meta/engram.json` and `graphify` is on PATH —
-   read `graphify-out/GRAPH_REPORT.md` for structure when it exists; **otherwise build it now, no manual
-   step.** `graphify .` **hard-fails without an LLM key**, so first make `GEMINI_API_KEY` available (export it
-   from `_meta/semantic/.env` if present). **If no key is found anywhere, tell the user plainly that the
-   Graphify graph was skipped for lack of `GEMINI_API_KEY`** (set it and re-run `/onboard-project`) and grep
-   the repo instead — never run `graphify .` keyless. With a key: first copy the vault's code-only
-   `.graphifyignore` into the repo (so the graph excludes docs/images and matches what the commit hook
-   rebuilds — otherwise `graphify update .` diverges from the build), then run `graphify .`, then
-   `graphify cluster-only .`, then install the auto-rebuild hook with
+   **Graphify (auto, no API key):** if `graphify.enabled` is true in `_meta/engram.json` and `graphify` is on
+   PATH — read `graphify-out/GRAPH_REPORT.md` for structure when it exists; **otherwise build it now, no manual
+   step:** copy the vault's code-only `.graphifyignore` into the repo, then run `graphify update .` (AST-only →
+   writes graph.json + GRAPH_REPORT.md + graph.html; **no LLM, no API key**), then install the auto-rebuild
+   hook with
    `pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-graphify-hook.ps1'; Install-GraphifyHook -RepoPath ."`
    (use **this**, not `graphify hook install` — the upstream hook silently no-ops on uv-tool/Windows installs),
-   then read the report. If Graphify is disabled or not installed, grep the repo directly.
+   then read the report. Don't use the full `graphify .` (it needs a Gemini key and adds nothing once docs are
+   excluded). If Graphify is disabled or not installed, grep the repo directly.
 3. Create `projects/<slug>/<slug>.md` from `_meta/templates/project.md`: what it is, stack, status,
    build/test/lint commands, and observability coordinates (logfire project / db — **names only, never
    secrets**).
