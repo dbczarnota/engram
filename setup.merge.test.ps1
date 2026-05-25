@@ -24,5 +24,19 @@ $r3 = Merge-SessionEndHook -Settings $existing -Command $cmd
 Assert ($r3.Changed -eq $true) "preserve: reports changed"
 Assert ($r3.Settings['hooks']['SessionEnd'].Count -eq 2) "preserve: keeps existing + adds ours"
 
+# autoMemoryEnabled: set when absent
+$a = Set-AutoMemoryDisabled -Settings @{}
+Assert ($a.Changed -eq $true) "automem: changed when absent"
+Assert ($a.Settings['autoMemoryEnabled'] -eq $false) "automem: set to false"
+
+# autoMemoryEnabled: idempotent when already false
+$a2 = Set-AutoMemoryDisabled -Settings $a.Settings
+Assert ($a2.Changed -eq $false) "automem: unchanged when already false"
+
+# autoMemoryEnabled: flips an existing true
+$a3 = Set-AutoMemoryDisabled -Settings @{ autoMemoryEnabled = $true }
+Assert ($a3.Changed -eq $true) "automem: flips true to false"
+Assert ($a3.Settings['autoMemoryEnabled'] -eq $false) "automem: now false"
+
 if ($script:fails -gt 0) { Write-Error "$script:fails assertion(s) failed"; exit 1 }
 Write-Host "all passed"

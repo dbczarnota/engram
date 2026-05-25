@@ -21,3 +21,13 @@ function Merge-SessionEndHook {
   $Settings['hooks']['SessionEnd'] = @($Settings['hooks']['SessionEnd']) + $newEntry
   return @{ Settings = $Settings; Changed = $true }
 }
+
+function Set-AutoMemoryDisabled {
+  param([hashtable]$Settings)
+  if ($null -eq $Settings) { $Settings = @{} }
+  if ($Settings.ContainsKey('autoMemoryEnabled') -and $Settings['autoMemoryEnabled'] -eq $false) {
+    return @{ Settings = $Settings; Changed = $false }
+  }
+  $Settings['autoMemoryEnabled'] = $false
+  return @{ Settings = $Settings; Changed = $true }
+}
