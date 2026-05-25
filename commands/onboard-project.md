@@ -7,8 +7,12 @@ Target: $ARGUMENTS (default: current working directory).
 
 1. Resolve the repo root and pick a kebab-case slug.
 2. Analyze the repo: README, package manifests (pyproject/package.json), top-level structure, its own
-   CLAUDE.md if any, recent `git log`. **If a Graphify graph exists (`graphify-out/GRAPH_REPORT.md`), read
-   that for structure instead of grepping broadly.**
+   CLAUDE.md if any, recent `git log`.
+   **Graphify (auto):** if `graphify.enabled` is true in `_meta/engram.json` and `graphify` is on PATH —
+   read `graphify-out/GRAPH_REPORT.md` for structure when it exists; **otherwise build it now, no manual
+   step:** run `graphify .`, then `graphify cluster-only .`, then `graphify hook install` (the semantic pass
+   needs `GEMINI_API_KEY`; if it's unset, note that and skip the build). If Graphify is disabled or not
+   installed, grep the repo directly.
 3. Create `projects/<slug>/<slug>.md` from `_meta/templates/project.md`: what it is, stack, status,
    build/test/lint commands, and observability coordinates (logfire project / db — **names only, never
    secrets**).

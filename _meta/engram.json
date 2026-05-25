@@ -1,5 +1,6 @@
 {
   "semantic":   { "enabled": true },
   "autoRecall": { "enabled": true, "topN": 3, "minScore": 0.30, "tokenBudget": 200,
-                  "scope": ["standards", "lessons", "decisions"] }
+                  "scope": ["standards", "lessons", "decisions"] },
+  "graphify":   { "enabled": false }
 }

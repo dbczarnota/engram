@@ -200,7 +200,13 @@ else {
       if (Confirm-Step "Install Graphify (codebase knowledge graph)?") {
         & uv tool install graphifyy --with openai
         & graphify install --platform windows
-        $script:manual += "Graphify: set GEMINI_API_KEY in your environment, then run 'graphify .' inside a repo."
+        # Record the opt-in so /onboard-project auto-builds graphs for new repos (no manual init).
+        $cfgPath = "$BrainPath\_meta\engram.json"
+        if (Test-Path $cfgPath) {
+          ((Get-Content $cfgPath -Raw) -replace '("graphify":\s*\{\s*"enabled":\s*)false', '${1}true') |
+            Set-Content -LiteralPath $cfgPath -Encoding UTF8
+        }
+        $script:manual += "Graphify: set GEMINI_API_KEY in your environment. Graphs then build automatically when you run /onboard-project on a repo; to graph one by hand, run 'graphify .' then 'graphify hook install' inside it."
         Write-Host "  Graphify installed [ok]"
       }
     } else { Write-Host "  Graphify skipped (uv not found)" }

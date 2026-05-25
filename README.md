@@ -200,7 +200,7 @@ If you enabled semantic search, its Python package has its own suite: `uv run --
 | `/vault-audit` | Lint: orphans, dead links, index drift, frontmatter gaps. |
 | `/logs <focus>` | Investigate Logfire for the current project (if you use the Logfire MCP). |
 | `/db <question>` | Query the project's database via a postgres MCP (if configured). |
-| `/onboard-project <path>` | Analyze a repo and add it to the vault (reads a Graphify graph if present). |
+| `/onboard-project <path>` | Analyze a repo and add it to the vault (auto-builds/reads its Graphify graph when enabled). |
 | `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
 | `/archive-project <slug>` | Move a finished project to `archive/`, excluded from recall + dashboards. |
 
@@ -244,15 +244,19 @@ deliberately thrifty and quiet:
 
 Toggle and tune it in `_meta/engram.json` (`autoRecall.enabled` / `topN` / `minScore` / `tokenBudget` /
 `scope`); the same file's `semantic.enabled` flag also gates the semantic layer (auto-recall escalation and
-the `/recall` semantic tier). Trivial prompts ("ok", "run it") do nothing. *(Graphify isn't in `engram.json`
-— it's a separate per-repo tool, enabled simply by installing it.)*
+the `/recall` semantic tier). Trivial prompts ("ok", "run it") do nothing. *(Graphify stays a separate
+per-repo tool; the `graphify.enabled` flag here only controls whether `/onboard-project` auto-builds a graph
+for a newly onboarded repo — `setup.ps1` flips it on when you install Graphify.)*
 
 ## Optional: Graphify (codebase knowledge graph)
 
 [Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph via
 tree-sitter (code is parsed locally, **0 tokens**; only docs/markdown use an LLM). It pairs well with this
 vault: Graphify maps **code structure inside** a project, the vault holds **knowledge across** projects.
-`/onboard-project` reads a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present.
+`/onboard-project` reads a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present — and
+when `graphify.enabled` is set, it **builds** the graph and installs the auto-rebuild hooks for a repo that
+doesn't have one yet, so you never have to initialize Graphify by hand. The manual sequence below is only for
+graphing a repo you're not onboarding.
 
 ```powershell
 uv tool install graphifyy --with openai          # 'openai' extra needed for Gemini/OpenAI-compatible backends

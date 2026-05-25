@@ -59,7 +59,8 @@ rides along in the project repo.
 
 - `/graphify` (skill) + a directive in your global `CLAUDE.md` tell the agent: **consult the graph before
   grepping**. Querying `graph.json` (~280 tokens) or reading `GRAPH_REPORT.md` beats reading 40 files.
-- `/onboard-project` reads a project's `GRAPH_REPORT.md` instead of scanning the whole codebase.
+- `/onboard-project` reads a project's `GRAPH_REPORT.md` instead of scanning the whole codebase; with
+  `graphify.enabled` set it also **builds** the graph (+ auto-rebuild hooks) for a repo that has none yet.
 - Net effect: cheaper, faster navigation of large codebases; the agent answers "where is X / what calls Y /
   what's the architecture" from the graph.
 
