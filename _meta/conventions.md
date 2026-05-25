@@ -15,7 +15,7 @@ This vault is the single source of truth for cross-project knowledge. It is read
 - Recall is always explicit (`/recall`) or via the pointer in global `~/.claude/CLAUDE.md`.
 
 ## Folders
-- `projects/<slug>/` — one folder per project: `index.md` (what/stack/status), `journal.md`
+- `projects/<slug>/` — one folder per project: `<slug>.md` (what/stack/status), `journal.md`
   (session summaries, newest on top), `todos.md` (deferred todos & ideas), `decisions/` (ADRs).
 - `standards/` — cross-project rules ("how we always do X"). Living documents.
 - `lessons/` — cross-project gotchas, one file per tech. Never solve the same problem twice.

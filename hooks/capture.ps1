@@ -4,11 +4,14 @@
 # Best-effort: any failure exits 0 so it never blocks session end.
 $ErrorActionPreference = "Stop"
 try {
+  # Recursion guard: the `claude -p` call below spawns a sub-session whose own SessionEnd
+  # re-invokes this hook. If we're already inside a capture, no-op immediately.
+  if ($env:BRAIN_CAPTURE_ACTIVE) { exit 0 }
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
 
-  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
+  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "C:\Users\czarn\Documents\A_PYTHON\brain" }
 
   # Heartbeat: unconditional proof the hook fired (debug whether the host fires SessionEnd at all).
   try {
@@ -43,6 +46,7 @@ Summarize this Claude Code session for a project journal. Output 5-10 terse bull
 decisions made, what changed, what's in progress, blockers. No preamble. If nothing
 substantive happened, output exactly: SKIP
 "@
+  $env:BRAIN_CAPTURE_ACTIVE = "1"   # mark so the nested session's SessionEnd hook no-ops (see guard above)
   $summary = ($lines -join "`n") | claude -p $prompt 2>$null
   if (-not $summary -or $summary.Trim() -eq "SKIP") { exit 0 }
 

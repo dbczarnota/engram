@@ -9,7 +9,7 @@ Target: $ARGUMENTS (default: current working directory).
 2. Analyze the repo: README, package manifests (pyproject/package.json), top-level structure, its own
    CLAUDE.md if any, recent `git log`. **If a Graphify graph exists (`graphify-out/GRAPH_REPORT.md`), read
    that for structure instead of grepping broadly.**
-3. Create `projects/<slug>/index.md` from `_meta/templates/project.md`: what it is, stack, status,
+3. Create `projects/<slug>/<slug>.md` from `_meta/templates/project.md`: what it is, stack, status,
    build/test/lint commands, and observability coordinates (logfire project / db — **names only, never
    secrets**).
 4. Create empty `projects/<slug>/journal.md` and `projects/<slug>/todos.md`.
