@@ -3,6 +3,9 @@
 # Best-effort: any failure exits 0 with no output so it never blocks a turn.
 $ErrorActionPreference = "Stop"
 try {
+  # Don't fire during the SessionEnd capture's headless `claude -p` sub-session.
+  if ($env:BRAIN_CAPTURE_ACTIVE) { exit 0 }
+
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
@@ -11,6 +14,15 @@ try {
 
   $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
   $sem = "$brain\_meta\semantic"
+
+  # Honor the toggle before spawning anything.
+  $cfgPath = "$brain\_meta\engram.json"
+  if (Test-Path $cfgPath) {
+    try {
+      $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+      if ($cfg.autoRecall -and $cfg.autoRecall.enabled -eq $false) { exit 0 }
+    } catch {}
+  }
 
   # Cheap pre-gate: skip obvious trivia without spawning Python.
   if (($prompt -split '\s+' | Where-Object { $_ }).Count -lt 4) { exit 0 }

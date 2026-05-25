@@ -4,13 +4,16 @@ import time
 from pathlib import Path
 
 from embedder import Embedder, build_embedder
-from index import build_index
+from index import build_index, index_dir
 
 
 def run(vault_root: Path, embedder: Embedder | None = None) -> str:
     embedder = embedder or build_embedder()
     start = time.perf_counter()
     stats = build_index(vault_root, embedder)
+    # Prune per-session auto-recall dedupe state — stale after a rebuild.
+    for f in index_dir(vault_root).glob("seen-*.json"):
+        f.unlink(missing_ok=True)
     elapsed = time.perf_counter() - start
     return (
         f"reindex done: files={stats.files} chunks={stats.chunks} "

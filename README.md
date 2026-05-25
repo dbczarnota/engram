@@ -201,7 +201,9 @@ deliberately thrifty and quiet:
   twice), so it doesn't drift into the always-on token cost this project rejects.
 
 Toggle and tune it in `_meta/engram.json` (`autoRecall.enabled` / `topN` / `minScore` / `tokenBudget` /
-`scope`); the same file toggles `semantic` and `graphify`. Trivial prompts ("ok", "run it") do nothing.
+`scope`); the same file's `semantic.enabled` flag also gates the semantic layer (auto-recall escalation and
+the `/recall` semantic tier). Trivial prompts ("ok", "run it") do nothing. *(Graphify isn't in `engram.json`
+— it's a separate per-repo tool, enabled simply by installing it.)*
 
 ## Optional: Graphify (codebase knowledge graph)
 

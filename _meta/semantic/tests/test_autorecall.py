@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fakes import FakeEmbedder
 from index import build_index
-from autorecall import auto_recall, is_substantive, load_config
+from autorecall import auto_recall, is_substantive, load_config, load_semantic_enabled
 
 
 def _vault(root: Path) -> None:
@@ -106,8 +106,14 @@ def test_unrelated_substantive_prompt_is_silent(tmp_path):
 
 def _recall(tmp_path, prompt, session_id):
     return auto_recall(
-        tmp_path, prompt, top_n=3, min_score=0.3, token_budget=200,
-        scope=["standards", "lessons", "decisions"], session_id=session_id, embedder=FakeEmbedder(),
+        tmp_path,
+        prompt,
+        top_n=3,
+        min_score=0.3,
+        token_budget=200,
+        scope=["standards", "lessons", "decisions"],
+        session_id=session_id,
+        embedder=FakeEmbedder(),
     )
 
 
@@ -132,6 +138,58 @@ def test_load_config_defaults_and_override(tmp_path):
     )
     cfg2 = load_config(tmp_path)
     assert cfg2["topN"] == 1 and cfg2["scope"] == ["lessons"] and cfg2["enabled"] is True
+
+
+def test_fts_single_meaningful_match_does_not_surface(tmp_path):
+    # Only "kinde" overlaps the auth note -> 1 meaningful term -> not a strong FTS hit.
+    # With semantic disabled there's no escalation, so the loose keyword coincidence stays silent.
+    _vault(tmp_path)
+    build_index(tmp_path, FakeEmbedder())
+    hint = auto_recall(
+        tmp_path,
+        "what is our kinde setup philosophy here exactly",
+        top_n=3,
+        min_score=0.3,
+        token_budget=200,
+        scope=["standards", "lessons", "decisions"],
+        semantic_enabled=False,
+        embedder=FakeEmbedder(),
+    )
+    assert hint is None
+
+
+def test_semantic_disabled_skips_escalation(tmp_path):
+    _vault(tmp_path)
+    build_index(tmp_path, FakeEmbedder())
+
+    class Boom:
+        name = "fake@8"
+        dim = 8
+
+        def embed_documents(self, t):
+            raise AssertionError("escalation ran while semantic disabled")
+
+        def embed_query(self, t):
+            raise AssertionError("escalation ran while semantic disabled")
+
+    hint = auto_recall(
+        tmp_path,
+        "describe our overall credential philosophy clearly please",  # no FTS overlap
+        top_n=3,
+        min_score=0.3,
+        token_budget=200,
+        scope=["standards", "lessons", "decisions"],
+        semantic_enabled=False,
+        embedder=Boom(),
+    )
+    assert hint is None
+
+
+def test_load_semantic_enabled(tmp_path):
+    assert load_semantic_enabled(tmp_path) is True  # default when no file
+    (tmp_path / "_meta").mkdir()
+    (tmp_path / "_meta" / "engram.json").write_text('{ "semantic": { "enabled": false } }', encoding="utf-8")
+    assert load_semantic_enabled(tmp_path) is False
 
 
 def test_trivial_prompt_is_silent(tmp_path):

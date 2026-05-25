@@ -49,16 +49,77 @@ _CUES = {
 }
 
 
+# Words that are too common (or are our own substantive-gate cues) to count as evidence that a
+# keyword-matched note is actually relevant. Used to reject single-coincidence FTS hits.
+_STOP = _CUES | {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "to",
+    "of",
+    "in",
+    "on",
+    "for",
+    "with",
+    "as",
+    "at",
+    "by",
+    "our",
+    "we",
+    "you",
+    "it",
+    "this",
+    "that",
+    "these",
+    "those",
+    "us",
+    "from",
+    "into",
+    "about",
+    "please",
+    "here",
+    "there",
+    "exactly",
+    "clearly",
+    "overall",
+    "just",
+    "really",
+}
+
+
+def _read_engram(vault_root: Path) -> dict:
+    path = vault_root / "_meta" / "engram.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def load_config(vault_root: Path) -> dict:
     """autoRecall config merged over defaults; missing file/keys -> defaults."""
-    path = vault_root / "_meta" / "engram.json"
-    data: dict = {}
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    return {**_DEFAULT_AR, **(data.get("autoRecall") or {})}
+    return {**_DEFAULT_AR, **(_read_engram(vault_root).get("autoRecall") or {})}
+
+
+def load_semantic_enabled(vault_root: Path) -> bool:
+    """Whether the semantic (embedding) layer is enabled; gates auto-recall escalation + /recall tier."""
+    return bool((_read_engram(vault_root).get("semantic") or {}).get("enabled", True))
+
+
+def _meaningful_terms(prompt: str) -> list[str]:
+    seen: list[str] = []
+    for t in re.findall(r"\w+", prompt.lower()):
+        if len(t) > 2 and t not in _STOP and t not in seen:
+            seen.append(t)
+    return seen
 
 
 def is_substantive(prompt: str) -> bool:
@@ -73,25 +134,28 @@ def _in_scope(path: str, scope: list[str]) -> bool:
     return any(seg in parts for seg in scope)
 
 
-def _fts_match(prompt: str) -> str:
-    return " OR ".join(re.findall(r"\w+", prompt.lower()))
-
-
 def _row(con, cid: int):
     return con.execute("SELECT path, heading_path, text FROM chunks WHERE chunk_id=?", (cid,)).fetchone()
 
 
 def _fts_candidates(con, prompt: str, scope: list[str], k: int = 20) -> list[tuple[int, tuple]]:
-    match = _fts_match(prompt)
-    if not match:
+    # Match only on meaningful terms and require >=2 of them to actually appear in the note, so a
+    # single coincidental keyword (often a common/cue word) does not surface a loosely-related note.
+    meaningful = _meaningful_terms(prompt)
+    if not meaningful:
         return []
+    need = min(2, len(meaningful))
     rows = con.execute(
-        "SELECT chunk_id FROM fts_chunks WHERE fts_chunks MATCH ? ORDER BY rank LIMIT ?", (match, k)
+        "SELECT chunk_id FROM fts_chunks WHERE fts_chunks MATCH ? ORDER BY rank LIMIT ?",
+        (" OR ".join(meaningful), k),
     ).fetchall()
     out: list[tuple[int, tuple]] = []
     for (cid,) in rows:
         r = _row(con, cid)
-        if r and _in_scope(r[0], scope):
+        if not r or not _in_scope(r[0], scope):
+            continue
+        text = f"{r[1]} {r[2]}".lower()  # heading + body
+        if sum(1 for t in meaningful if t in text) >= need:
             out.append((cid, r))
     return out
 
@@ -163,6 +227,7 @@ def auto_recall(
     min_score: float,
     token_budget: int,
     scope: list[str],
+    semantic_enabled: bool = True,
     session_id: str | None = None,
     embedder=None,
 ) -> str | None:
@@ -183,7 +248,7 @@ def auto_recall(
         candidates: dict[int, tuple] = {cid: r for cid, r in fts if cid in strong_fts}
 
         vec_ids: list[int] = []
-        if not strong_fts:  # escalate only when FTS gave nothing strong (lazy genai import)
+        if not strong_fts and semantic_enabled:  # escalate only when FTS is weak AND semantics are on
             from embedder import build_embedder
 
             emb = embedder or build_embedder()
@@ -232,6 +297,7 @@ def main() -> None:
         min_score=float(cfg["minScore"]),
         token_budget=int(cfg["tokenBudget"]),
         scope=list(cfg["scope"]),
+        semantic_enabled=load_semantic_enabled(vault_root),
         session_id=session_id,
         embedder=None,
     )
