@@ -8,8 +8,8 @@ date: 2026-05-25
 # 🗂 Projects
 
 ```dataview
-TABLE status, date AS "updated"
+TABLE WITHOUT ID link(file.link, regexreplace(file.folder, ".*/", "")) AS "Project", status, date AS "updated"
 FROM "projects"
 WHERE type = "project"
-SORT date DESC
+SORT file.folder ASC
 ```
