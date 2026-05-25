@@ -20,3 +20,15 @@ One paragraph.
 
 ## Observability
 - logfire project: ` ` · db: ` ` (credentials live in the repo's own config, not here)
+
+## Specs & plans
+
+**Specs**
+```dataview
+LIST WHERE startswith(file.path, this.file.folder + "/specs/") SORT file.name DESC
+```
+
+**Plans**
+```dataview
+LIST WHERE startswith(file.path, this.file.folder + "/plans/") SORT file.name DESC
+```
