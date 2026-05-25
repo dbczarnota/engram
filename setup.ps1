@@ -209,6 +209,7 @@ else {
 
 # [8/8] Guided manual steps
 Step "[8/8] Manual steps (these can't be automated)"
+$script:manual += "Install the 'superpowers' plugin (Engram is built around its brainstorm->spec->plan workflow): in Claude Code run  /plugin marketplace add anthropics/claude-plugins-official  then  /plugin install superpowers@claude-plugins-official"
 $script:manual += "Open this folder in Obsidian and enable the Dataview community plugin."
 $script:manual += "Restart Claude Code, then run '/recall test' to confirm the commands load."
 

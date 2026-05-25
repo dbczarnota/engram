@@ -130,10 +130,16 @@ team-scale, multi-user shared memory.
 ## Requirements
 
 - [Claude Code](https://code.claude.com)
+- The **[superpowers](https://github.com/obra/superpowers)** plugin (recommended) — Engram is built around
+  its brainstorm → spec → plan → implement workflow, and `/extract-standards` reads the specs/plans it
+  produces. Install: `/plugin marketplace add anthropics/claude-plugins-official` then
+  `/plugin install superpowers@claude-plugins-official`. The wizard reminds you of this at the end.
 - PowerShell 7+ (`pwsh`) — for the setup wizard and the capture hook (Windows-first; see *Non-Windows*)
 - git
 - [Obsidian](https://obsidian.md) (optional, for the graph/dashboards) + its **Dataview** community plugin
 - [uv](https://docs.astral.sh/uv/) + a Gemini API key (optional, only for semantic `/recall`)
+- *(Optional, and not set up by the wizard)* a **Logfire MCP** for `/logs` and a **Postgres MCP** for `/db`
+  — wire these yourself only if you use those commands; everything else works without them.
 
 ## Quick start
 
@@ -161,6 +167,7 @@ It is **idempotent**: re-run it any time — already-done steps report `[ok]` an
 
 A few things a script genuinely can't do are listed as **guided reminders** in the closing summary:
 
+- Install the **superpowers** plugin (the brainstorm → spec → plan workflow Engram is built around).
 - Disable any claude-mem-style **plugin** (a script can't toggle plugins).
 - Open the folder in **Obsidian** and enable the **Dataview** community plugin.
 - **Restart Claude Code**, then run `/recall test` to confirm the commands loaded.
