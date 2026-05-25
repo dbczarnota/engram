@@ -38,6 +38,20 @@ else {
   Write-Host "[2/2] Created junction: $link -> $target"
 }
 
+# 3) Optional: semantic search deps. Installs the _meta/semantic env if `uv` is available.
+$sem = "$BrainPath\_meta\semantic"
+if (Test-Path "$sem\pyproject.toml") {
+  if (Get-Command uv -ErrorAction SilentlyContinue) {
+    Write-Host "[3/3] Found 'uv' — installing semantic-search deps (uv sync)..."
+    & uv sync --project $sem | Out-Null
+    Write-Host "      Done. Enable it via the manual step below (set a key, then reindex)."
+  }
+  else {
+    Write-Host "[3/3] Semantic search present but 'uv' not found — skipping (optional)."
+    Write-Host "      Install uv (https://docs.astral.sh/uv/) to enable it later."
+  }
+}
+
 Write-Host "`n--- MANUAL STEPS (in Claude Code / settings) ---"
 Write-Host "1. Register the session-end capture hook in ~/.claude/settings.json under `"hooks`":"
 Write-Host "     SessionEnd -> command: pwsh -NoProfile -File `"$BrainPath\hooks\capture.ps1`""
@@ -46,3 +60,5 @@ Write-Host "   ~/.claude/settings.json, and disable any claude-mem-style plugin.
 Write-Host "3. Add the ~15-line vault pointer to your global ~/.claude/CLAUDE.md (see README.md)."
 Write-Host "4. Open this folder in Obsidian and enable the Dataview community plugin."
 Write-Host "5. Restart Claude Code, then run '/recall test' to verify the commands load."
+Write-Host "6. (Optional) Enable semantic recall: copy '$sem\.env.example' to '.env', set GEMINI_API_KEY,"
+Write-Host "   then build the index: uv run --directory `"$sem`" --env-file `"$sem\.env`" python -m reindex"

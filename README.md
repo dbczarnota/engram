@@ -30,6 +30,7 @@ markdown file costs no session tokens and is fully visible in a git diff.
 - PowerShell 7+ (`pwsh`) — for the setup script and the capture hook (Windows-first; see Non-Windows below)
 - git
 - [Obsidian](https://obsidian.md) (optional, for the graph/dashboards) + its **Dataview** community plugin
+- [uv](https://docs.astral.sh/uv/) + a Gemini API key (optional, only for semantic `/recall` — see below)
 
 ## Quick start
 
@@ -72,7 +73,7 @@ slash-commands globally (a junction at `~/.claude/commands`). It then prints the
 
 | Command | Purpose |
 |---|---|
-| `/recall <query>` | Tiered recall: reads `_meta/index.md` first, drills into matching pages only. |
+| `/recall <query>` | Tiered recall: reads `_meta/index.md` first, then an optional semantic tier, then drills into matching pages only. Works grep-only if semantic search isn't set up. |
 | `/checkpoint` | Summarize the current session into the active project's `journal.md` + capture todos. |
 | `/remember-standard <topic>` | Record a cross-project standard (explicit). Flags conflicts, never silent-overwrites. |
 | `/remember-lesson <tech>` | Record a hard-won lesson. |
@@ -82,6 +83,32 @@ slash-commands globally (a junction at `~/.claude/commands`). It then prints the
 | `/onboard-project <path>` | Analyze a repo and add it to the vault (reads a Graphify graph if present). |
 | `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
 | `/archive-project <slug>` | Move a finished project to `archive/`, excluded from recall + dashboards. |
+
+## Optional: Semantic search (concept-level `/recall`)
+
+A small, self-contained semantic index over the vault's markdown lives in `_meta/semantic/`. It lets
+`/recall` find notes by *meaning*, not just keywords (e.g. "how do we authenticate clients" finds a note
+titled "two-scheme X-API-Key + Kinde JWT"). It's **optional**: without it, `/recall` falls back to the
+index + grep tiers.
+
+How it works: markdown is chunked by heading, embedded with **Gemini** (behind a swappable `Embedder`
+Protocol — point it at Voyage/Jina later), stored in **`sqlite-vec` + FTS5**, and queried as a hybrid
+(vector + keyword) fused with Reciprocal Rank Fusion. The index is gitignored and regenerable — never a
+source of truth.
+
+```powershell
+cd _meta\semantic
+copy .env.example .env          # then put your key in it (GEMINI_API_KEY=...)
+uv run --env-file .env python -m reindex   # build the index (also re-run after big edits)
+```
+
+Re-embedding is cached by content hash, so re-runs only embed changed chunks. To swap providers, implement
+another `Embedder` in `embedder.py` and select it via `BRAIN_EMBED_PROVIDER`; a provider/dimension change
+is detected and refuses a stale index until you reindex. Tests: `uv run pytest`.
+
+> **Semantic search vs Graphify (below):** complementary, not the same engine. This indexes the vault's
+> **knowledge across projects**; Graphify maps **code structure inside** one repo with its own embedding
+> pass. They share only the `GEMINI_API_KEY` env var.
 
 ## Optional: Graphify (codebase knowledge graph)
 
@@ -116,6 +143,7 @@ fire `SessionEnd` reliably, just use `/checkpoint` manually. Run `hooks/capture.
 CLAUDE.md            router for the agent when working inside the vault
 Home.md              human landing page (open in Obsidian)
 _meta/               conventions, templates, recall index, project-map
+_meta/semantic/      optional semantic-search index (Gemini + sqlite-vec); gitignored .env/.index
 commands/            the slash-commands (junctioned to ~/.claude/commands)
 hooks/               session-end capture hook + tests
 standards/  lessons/  research/  projects/  archive/  dashboards/

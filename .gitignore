@@ -11,3 +11,11 @@ Thumbs.db
 
 # hook runtime log (proof-of-fire heartbeat)
 hooks/hook-fired.log
+
+# semantic search (optional) — secrets, regenerable index + uv env
+_meta/semantic/.env
+_meta/semantic/.index/
+_meta/semantic/.venv/
+_meta/semantic/__pycache__/
+_meta/semantic/**/__pycache__/
+_meta/semantic/.pytest_cache/
