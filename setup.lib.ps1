@@ -49,3 +49,17 @@ function Update-ClaudePointer {
   $new = $prefix + $wrapped + "`n"
   return @{ Text = $new; Changed = $true }
 }
+
+function Get-JunctionState {
+  param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Target)
+  if (-not (Test-Path $Path)) { return 'absent' }
+  $item = Get-Item -LiteralPath $Path -Force
+  if ($item.LinkType -in @('Junction', 'SymbolicLink')) {
+    $linkTarget = @($item.Target)[0]
+    $a = (Resolve-Path -LiteralPath $linkTarget -ErrorAction SilentlyContinue)
+    $b = (Resolve-Path -LiteralPath $Target     -ErrorAction SilentlyContinue)
+    if ($a -and $b -and $a.Path.TrimEnd('\') -eq $b.Path.TrimEnd('\')) { return 'ours' }
+    return 'other-junction'
+  }
+  return 'real-dir'
+}
