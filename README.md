@@ -250,23 +250,28 @@ for a newly onboarded repo — `setup.ps1` flips it on when you install Graphify
 
 ## Optional: Graphify (codebase knowledge graph)
 
-[Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph via
-tree-sitter (code is parsed locally, **0 tokens**; only docs/markdown use an LLM). It pairs well with this
-vault: Graphify maps **code structure inside** a project, the vault holds **knowledge across** projects.
-`/onboard-project` reads a project's `graphify-out/GRAPH_REPORT.md` instead of grepping when present — and
-when `graphify.enabled` is set, it **builds** the graph and installs the auto-rebuild hooks for a repo that
-doesn't have one yet, so you never have to initialize Graphify by hand. The manual sequence below is only for
-graphing a repo you're not onboarding.
+[Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph from your
+code (tree-sitter AST, parsed locally — **0 tokens, no API key**). It pairs well with this vault: Graphify
+maps **code structure inside** a project, the vault holds **knowledge across** projects. A code-only
+`.graphifyignore` (shipped here) keeps it to source files — so a full build and the commit-hook rebuild stay
+identical, and no Gemini key is ever needed.
+
+`/onboard-project` does it for you: when `graphify.enabled` is set it copies the `.graphifyignore`, builds the
+graph with `graphify update .`, and installs an auto-rebuild post-commit hook — you never initialize Graphify
+by hand and it stays fresh on every commit. The manual sequence below is only for a repo you're not onboarding:
 
 ```powershell
-uv tool install graphifyy --with openai          # 'openai' extra needed for Gemini/OpenAI-compatible backends
-graphify install --platform windows              # registers the /graphify skill + CLAUDE.md directive
-# set an LLM key for the semantic pass, e.g. $env:GEMINI_API_KEY = "..."
+uv tool install graphifyy --with openai          # one-time: install the tool
+graphify install --platform windows              # one-time: register the /graphify skill
 cd C:\path\to\your\repo
-graphify .                                        # build graph.json (AST + semantic)
-graphify cluster-only .                           # regenerate GRAPH_REPORT.md + graph.html (open in browser)
-graphify hook install                             # post-commit/post-checkout auto-rebuild (per repo)
+Copy-Item <BRAIN_PATH>\.graphifyignore .          # code-only (exclude docs/images)
+graphify update .                                 # build/refresh graph.json + GRAPH_REPORT.md + graph.html (no key)
+pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-graphify-hook.ps1'; Install-GraphifyHook -RepoPath ."
 ```
+
+> The upstream `graphify hook install` is broken on uv-tool/Windows installs (it silently no-ops), so use
+> `install-graphify-hook.ps1` above. The full `graphify .` still works but needs a Gemini key and adds nothing
+> once docs are excluded.
 
 See `HOW-IT-WORKS.md` for the full mental model of how the vault and Graphify divide responsibilities.
 

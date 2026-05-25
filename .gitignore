@@ -9,8 +9,12 @@
 Thumbs.db
 .DS_Store
 
-# hook runtime log (proof-of-fire heartbeat)
+# hook runtime logs (heartbeat + capture decision trace)
 hooks/hook-fired.log
+hooks/capture.log
+
+# local per-machine Claude Code settings
+.claude/settings.local.json
 
 # Graphify code-structure graph (regenerable from code; knowledge lives in brain)
 graphify-out/
