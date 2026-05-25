@@ -31,3 +31,21 @@ function Set-AutoMemoryDisabled {
   $Settings['autoMemoryEnabled'] = $false
   return @{ Settings = $Settings; Changed = $true }
 }
+
+function Update-ClaudePointer {
+  param([string]$Text, [Parameter(Mandatory)][string]$Block)
+  if ($null -eq $Text) { $Text = '' }
+  $start   = '<!-- brain-vault-pointer:start -->'
+  $end     = '<!-- brain-vault-pointer:end -->'
+  $wrapped = "$start`n$Block`n$end"
+
+  $pattern = [regex]::Escape($start) + '.*?' + [regex]::Escape($end)
+  $rx      = [regex]::new($pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+  if ($rx.IsMatch($Text)) {
+    $new = $rx.Replace($Text, { param($m) $wrapped }, 1)
+    return @{ Text = $new; Changed = ($new -ne $Text) }
+  }
+  $prefix = if ($Text.TrimEnd().Length -gt 0) { $Text.TrimEnd() + "`n`n" } else { '' }
+  $new = $prefix + $wrapped + "`n"
+  return @{ Text = $new; Changed = $true }
+}
