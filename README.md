@@ -1,14 +1,19 @@
-# 🧠 brain — a memory & knowledge vault for Claude Code
+# 🧠 Engram — a memory & knowledge vault for Claude Code
 
-**A plain-markdown, git-versioned memory system that gives Claude Code persistent, *controllable*
+*The memory trace for your coding agent.*
+
+**Engram is a plain-markdown, git-versioned memory system that gives Claude Code persistent, *controllable*
 knowledge across all your projects — without burning context tokens.**
+
+> *An engram is the physical trace a memory leaves behind. This is that trace for your agent — durable,
+> inspectable, and yours.*
 
 It is also an **Obsidian vault**: open the folder in Obsidian to browse the graph, dashboards, and notes.
 Claude reads the same `.md` files via grep (and, optionally, semantic search) — so you get a visual wiki
 for humans **and** cheap, on-demand recall for the agent, from one source of truth.
 
-This repository is a **starter template**: clone it, run one wizard, and you have an empty, working brain
-of your own. The example standard and lesson shipped inside are meant to be deleted.
+This repository is a **starter template**: clone it, run one wizard, and you have an empty, working Engram
+vault of your own. The example standard and lesson shipped inside are meant to be deleted.
 
 ---
 
@@ -55,7 +60,7 @@ compounds instead of decaying.
 
 Honest positioning against other "memory for coding agents" approaches:
 
-| Dimension | **brain (this)** | claude-mem | Mem0 / Zep | Letta / MemGPT | basic-memory (MCP) |
+| Dimension | **Engram (this)** | claude-mem | Mem0 / Zep | Letta / MemGPT | basic-memory (MCP) |
 |---|---|---|---|---|---|
 | Store | **markdown + git** | SQLite + Chroma | hosted / vectors | memory blocks | markdown + SQLite |
 | Read model | **on-demand, visible cost** | auto-injected each session | proactive injection | automatic | MCP query |
@@ -66,12 +71,12 @@ Honest positioning against other "memory for coding agents" approaches:
 | Scale / multi-user | personal / solo | small | **strong** | medium | medium |
 | Offline / no service | **yes** | yes | no | depends | yes |
 
-**Where brain wins:** control and auditability (plain text in git), transparent token cost (nothing
+**Where Engram wins:** control and auditability (plain text in git), transparent token cost (nothing
 auto-injected), dual human+agent use (the same files power an Obsidian graph), and — the real
 differentiator — distilling **engineering standards and lessons** that apply across projects. Most memory
 tools store conversational facts; almost none capture "how we build things."
 
-**Where brain is weaker (by design or for now):**
+**Where Engram is weaker (by design or for now):**
 
 - **No automatic memory extraction.** Mem0 and claude-mem mine your conversations for you; brain relies on
   an explicit `/remember-standard` / `/remember-lesson` plus a session-end journal hook. It rewards a little
@@ -83,7 +88,7 @@ tools store conversational facts; almost none capture "how we build things."
 - **Personal scale.** grep + a small semantic index over your markdown is perfect for one person's vault;
   it is not a multi-user, team-scale memory backend.
 
-**Choose brain if** you're a solo developer working across many projects who wants control, auditability,
+**Choose Engram if** you're a solo developer working across many projects who wants control, auditability,
 and reusable standards. **Look at Mem0/Zep instead if** you want zero-effort automatic memory or
 team-scale, multi-user shared memory.
 
