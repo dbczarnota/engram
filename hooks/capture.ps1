@@ -51,17 +51,41 @@ try {
   $convo = Get-CondensedTranscript -Path $hook.transcript_path
   if (-not $convo) { & $log "bail: empty digest ($slug)"; exit 0 }
   & $log ("digest slug={0} chars={1}" -f $slug, $convo.Length)
-  $prompt = "You are writing a project journal entry. Summarize the session transcript piped to you into 3-6 terse bullets covering decisions, changes, what's in progress, and TODOs/blockers. Output ONLY the bullets (each starting with '- '), no preamble or heading."
+  # Journal language is configurable (default English) so the vault stays single-language even when a
+  # session was conducted in another language — `claude -p` otherwise mirrors the transcript's language.
+  $lang = "English"
+  try {
+    if (Test-Path "$brain\_meta\engram.json") {
+      $ecfg = Get-Content "$brain\_meta\engram.json" -Raw | ConvertFrom-Json
+      if ($ecfg.journal -and $ecfg.journal.language) { $lang = "" + $ecfg.journal.language }
+    }
+  } catch {}
+  $prompt = "You are writing a project journal entry. Summarize the session transcript piped to you into 3-6 terse bullets covering decisions, changes, what's in progress, and TODOs/blockers. Write the entry in $lang regardless of the language used in the transcript. Output ONLY the bullets (each starting with '- '), no preamble or heading."
   $env:BRAIN_CAPTURE_ACTIVE = "1"   # nested session's SessionEnd hook no-ops (see guard above)
+  # `claude -p` emits UTF-8; the console's default OEM codepage (e.g. CP852 on PL Windows) would
+  # mangle non-ASCII (Polish diacritics) in the captured stdout. Force UTF-8 decoding of child output.
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
   $summary = ($convo | claude -p $prompt 2>$null) -join "`n"
   # strip any stray CLI warning that may leak into stdout, then bail if empty
   $summary = ($summary -replace '(?m)^\s*Warning: no stdin data received.*$', '').Trim()
   if (-not $summary) { & $log "bail: empty summary ($slug)"; exit 0 }
 
   $date = Get-Date -Format "yyyy-MM-dd HH:mm"
-  $entry = "## $date - session $($hook.session_id)`n$summary`n`n"
+  # Record the git branch the work happened on (best-effort; blank for detached HEAD / non-git cwd).
+  $branch = ""
+  try { $branch = (& git -C $cwd rev-parse --abbrev-ref HEAD 2>$null) -join "" } catch {}
+  $branchTag = if ($branch -and $branch -ne "HEAD") { " - branch: $branch" } else { "" }
+  $entry = "## $date - session $($hook.session_id)$branchTag`n$summary`n`n"
   $existing = if (Test-Path $journal) { Get-Content $journal -Raw } else { "" }
-  Set-Content -Path $journal -Value ($entry + $existing) -Encoding utf8
+  # Insert before the FIRST existing "## " entry so the newest entry leads the entry list without
+  # displacing leading frontmatter / title / intro. Plain prepend when there are no entries yet.
+  $firstEntry = [regex]::Match($existing, '(?m)^## ')
+  if ($firstEntry.Success) {
+    $merged = $existing.Substring(0, $firstEntry.Index) + $entry + $existing.Substring($firstEntry.Index)
+  } else {
+    $merged = $entry + $existing
+  }
+  Set-Content -Path $journal -Value $merged -Encoding utf8
   & $log ("wrote journal entry: $slug (session $($hook.session_id))")
 
   # Auto-reindex the semantic index so it tracks the vault (the journal entry just written, plus any
