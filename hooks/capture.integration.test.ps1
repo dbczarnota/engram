@@ -18,6 +18,12 @@ try {
   (@{ $cwd = $proj } | ConvertTo-Json) | Set-Content "$tmp\_meta\project-map.json" -Encoding utf8
   "# Journal`n" | Set-Content "$tmp\projects\$proj\journal.md" -Encoding utf8
 
+  # Seed the session scratch with real work so the SessionEnd gate (Test-ShouldSummarize) passes.
+  # (In a live session the Stop/PostToolUse hooks populate this; here we simulate it.)
+  New-Item -ItemType Directory -Force "$tmp\_meta\state" | Out-Null
+  . (Join-Path $here "capture.lib.ps1")
+  Add-ScratchFile -Brain $tmp -SessionId "itest" -File "$cwd\helper.py"
+
   # fake transcript: realistic JSONL (the condenser parses these; plain text would be skipped)
   $tlines = @(
     (@{ type = "user";      message = @{ role = "user";      content = "add a retry helper" } } | ConvertTo-Json -Compress -Depth 6)

@@ -30,6 +30,11 @@ status: active
 "@
   Set-Content -Path $journalPath -Value $orig -Encoding utf8
 
+  # Seed the session scratch with real work so the SessionEnd gate (Test-ShouldSummarize) passes.
+  New-Item -ItemType Directory -Force "$tmp\_meta\state" | Out-Null
+  . (Join-Path $here "capture.lib.ps1")
+  Add-ScratchFile -Brain $tmp -SessionId "new" -File "$cwd\thing.py"
+
   $tlines = @(
     (@{ type = "user";      message = @{ role = "user";      content = "do a thing" } } | ConvertTo-Json -Compress -Depth 6)
     (@{ type = "assistant"; message = @{ role = "assistant"; content = @(@{ type = "text"; text = "did the thing" }) } } | ConvertTo-Json -Compress -Depth 6)
