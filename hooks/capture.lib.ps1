@@ -207,7 +207,8 @@ function Find-MatchingFeature {
   $sessionFiles = @(@($Files) | ForEach-Object { ($_ -replace '\\', '/').ToLower() })
   if ($sessionFiles.Count -eq 0) { return $null }
   $best = $null; $bestCount = 0
-  foreach ($f in Get-ChildItem $dir -Filter *.md -ErrorAction SilentlyContinue) {
+  # Sort by name so ties resolve deterministically (first alphabetically wins; $count -gt is strict).
+  foreach ($f in (Get-ChildItem $dir -Filter *.md -ErrorAction SilentlyContinue | Sort-Object Name)) {
     $raw = Get-Content $f.FullName -Raw
     $line = [regex]::Match($raw, '(?m)^files:\s*(.+)$')
     if (-not $line.Success) { continue }
