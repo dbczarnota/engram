@@ -64,3 +64,16 @@ def test_normalize_capture_journal_list_to_string():
     assert normalize_capture({"journal": None})["journal"] == ""
     assert normalize_capture({"journal": "- x"})["journal"] == "- x"
     assert normalize_capture("nope") == {}
+
+
+def test_claude_cli_uses_resolved_exe(monkeypatch):
+    from summarize import ClaudeCliSummarizer
+    captured = {}
+    monkeypatch.setattr("shutil.which", lambda name: r"C:\x\claude.CMD")
+    class _R:
+        stdout = '{"journal":"- ok"}'
+    monkeypatch.setattr("subprocess.run", lambda args, **kw: captured.update(args=args) or _R())
+    out = ClaudeCliSummarizer("sonnet").generate("sys", "usr")
+    assert captured["args"][0].endswith("claude.CMD")
+    assert "--model" in captured["args"] and "sonnet" in captured["args"]
+    assert out == '{"journal":"- ok"}'

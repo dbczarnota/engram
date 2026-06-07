@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -94,10 +95,18 @@ class ClaudeCliSummarizer:
         self.name = f"claude-cli:{model or 'default'}"
 
     def generate(self, system: str, user: str) -> str:
-        args = ["claude", "-p", system]
+        # Resolve the real executable: on Windows `claude` is a `claude.CMD` npm shim that bare
+        # subprocess (no shell) cannot find — shutil.which honors PATHEXT and returns the full path.
+        exe = shutil.which("claude")
+        if not exe:
+            return ""
+        args = [exe, "-p", system]
         if self.model:
             args += ["--model", self.model]
-        r = subprocess.run(args, input=user, capture_output=True, text=True, encoding="utf-8")
+        try:
+            r = subprocess.run(args, input=user, capture_output=True, text=True, encoding="utf-8")
+        except OSError:
+            return ""
         return r.stdout or ""
 
 
@@ -123,7 +132,7 @@ def build_summarizer() -> Summarizer:
     provider = os.environ.get("BRAIN_CAPTURE_PROVIDER") or _cfg("provider", "gemini")
     model = os.environ.get("BRAIN_CAPTURE_MODEL") or _cfg("model", "")
     if provider == "gemini":
-        return GeminiSummarizer(model or "gemini-2.5-flash")
+        return GeminiSummarizer(model or "gemini-3-flash-preview")
     if provider == "ollama":
         return OllamaSummarizer(model or "qwen2.5")
     if provider == "claude-cli":
