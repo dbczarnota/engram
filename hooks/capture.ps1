@@ -29,19 +29,11 @@ try {
   $log = { param($m) try { Add-Content -Path $logf -Value ("{0}  {1}" -f (Get-Date -Format s), $m) } catch {} }
 
   if (-not (Test-ShouldSummarize -Brain $brain -SessionId $sid)) { & $log "skip (gate): $slug $sid"; exit 0 }
-
-  $wrote = Invoke-JournalSummary -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Cwd ("" + $hook.cwd)
+  $wrote = Invoke-Capture -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Cwd ("" + $hook.cwd)
   if ($wrote) {
     Set-ScratchFlag -Brain $brain -SessionId $sid -Name "summarized" -Value $true
-    & $log "wrote journal entry: $slug ($sid)"
-    Invoke-GotchaDraft -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path)
-    $branch = ""
-    try { $branch = (& git -C ("" + $hook.cwd) rev-parse --abbrev-ref HEAD 2>$null) -join "" } catch {}
-    $files = @((Get-SessionScratch -Brain $brain -SessionId $sid).files)
-    Invoke-FeatureCurator -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Files $files -Branch $branch
-  } else {
-    & $log "bail: no entry written ($slug $sid)"; exit 0
-  }
+    & $log "captured: $slug ($sid)"
+  } else { & $log "bail: no entry written ($slug $sid)"; exit 0 }
 
   # Auto-reindex the semantic index so it tracks the vault (the journal entry just written, plus any
   # edits this session made, land before the next auto-recall). Best-effort; honors the semantic

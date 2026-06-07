@@ -36,12 +36,10 @@ try {
   if (($hitThreshold -or $commitTrigger) -and -not $env:BRAIN_NO_SUMMARIZE) {
     $slug = Resolve-Slug -Brain $brain -Cwd $cwd
     if ($slug -and (Test-ShouldSummarize -Brain $brain -SessionId $sid)) {
-      $wrote = Invoke-JournalSummary -Brain $brain -Slug $slug -SessionId $sid `
-        -TranscriptPath ("" + $hook.transcript_path) -Cwd $cwd -Partial
+      $wrote = Invoke-Capture -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Cwd $cwd -Partial
       if ($wrote) {
         # Intentionally NOT setting summarized=true — partial entries may repeat across a long
         # session; only the SessionEnd capture finalizes (sets summarized) to block duplicate fires.
-        Invoke-GotchaDraft -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path)
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "turns" -Value 0
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "committed" -Value $false
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "thresholdHit" -Value $false

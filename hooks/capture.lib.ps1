@@ -149,52 +149,74 @@ function Test-ShouldSummarize {
   return [bool]$realWork
 }
 
-# --- Summarize the transcript into a journal entry. Returns $true if an entry was written.
-# $Partial tags long-session intermediate captures. ---
-function Invoke-JournalSummary {
-  param(
-    [string]$Brain, [string]$Slug, [string]$SessionId,
-    [string]$TranscriptPath, [string]$Cwd, [switch]$Partial
-  )
+# --- One model-agnostic capture: condense -> python -m summarize -> {journal,lesson,feature}.
+# Writes the journal entry + stages lesson/feature drafts to _inbox. Best-effort. ---
+function Invoke-Capture {
+  param([string]$Brain, [string]$Slug, [string]$SessionId, [string]$TranscriptPath, [string]$Cwd, [switch]$Partial)
+  if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return $false }
   $journal = "$Brain\projects\$Slug\journal.md"
   if (-not (Test-Path $journal)) { return $false }
-  if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return $false }
   $convo = Get-CondensedTranscript -Path $TranscriptPath
   if (-not $convo) { return $false }
 
   $lang = "English"
   try {
-    $ecfgPath = "$Brain\_meta\engram.json"
-    if (Test-Path $ecfgPath) {
-      $ecfg = Get-Content $ecfgPath -Raw | ConvertFrom-Json
-      if ($ecfg.journal -and $ecfg.journal.language) { $lang = "" + $ecfg.journal.language }
-    }
+    $ecfg = Get-Content "$Brain\_meta\engram.json" -Raw | ConvertFrom-Json
+    if ($ecfg.journal -and $ecfg.journal.language) { $lang = "" + $ecfg.journal.language }
   } catch {}
+  $branch = ""
+  try { $branch = (& git -C $Cwd rev-parse --abbrev-ref HEAD 2>$null) -join "" } catch {}
+  $files = @((Get-SessionScratch -Brain $Brain -SessionId $SessionId).files)
+  $match = "" + (Find-MatchingFeature -Brain $Brain -Slug $Slug -Files $files)
 
-  $prompt = "You are writing a project journal entry. Summarize the session transcript piped to you into 3-6 terse bullets covering decisions, changes, what's in progress, and TODOs/blockers. Write in $lang regardless of the transcript's language. Output ONLY the bullets (each starting with '- '), no preamble or heading."
+  # BRAIN_SEM_DIR lets tests point at the real semantic dir (with its venv) instead of copying it.
+  $sem = if ($env:BRAIN_SEM_DIR) { $env:BRAIN_SEM_DIR } else { "$Brain\_meta\semantic" }
+  $runArgs = @('run', '--directory', $sem)
+  if (Test-Path "$sem\.env") { $runArgs += @('--env-file', "$sem\.env") }
+  $runArgs += @('python', '-m', 'summarize', '--feature-match', $match, '--branch', $branch, '--lang', $lang)
 
   $env:BRAIN_CAPTURE_ACTIVE = "1"
   [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-  $summary = ($convo | claude -p $prompt 2>$null) -join "`n"
-  $summary = ($summary -replace '(?m)^\s*Warning: no stdin data received.*$', '').Trim()
-  if (-not $summary) { return $false }
+  $raw = ($convo | & uv @runArgs 2>$null) -join "`n"
+  $data = $null
+  try { $data = $raw | ConvertFrom-Json } catch { return $false }
+  if (-not $data) { return $false }
 
-  $date = Get-Date -Format "yyyy-MM-dd HH:mm"
-  $branch = ""
-  try { $branch = (& git -C $Cwd rev-parse --abbrev-ref HEAD 2>$null) -join "" } catch {}
-  $branchTag = if ($branch -and $branch -ne "HEAD") { " - branch: $branch" } else { "" }
-  $partialTag = if ($Partial) { " (partial)" } else { "" }
-  $entry = "## $date - session $SessionId$partialTag$branchTag`n$summary`n`n"
+  $date = Get-Date -Format "yyyy-MM-dd"
+  $wrote = $false
 
-  $existing = Get-Content $journal -Raw
-  $firstEntry = [regex]::Match($existing, '(?m)^## ')
-  if ($firstEntry.Success) {
-    $merged = $existing.Substring(0, $firstEntry.Index) + $entry + $existing.Substring($firstEntry.Index)
-  } else {
-    $merged = $entry + $existing
+  $journalText = ("" + $data.journal).Trim()
+  if ($journalText) {
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm"
+    $branchTag = if ($branch -and $branch -ne "HEAD") { " - branch: $branch" } else { "" }
+    $partialTag = if ($Partial) { " (partial)" } else { "" }
+    $entry = "## $ts - session $SessionId$partialTag$branchTag`n$journalText`n`n"
+    $existing = Get-Content $journal -Raw
+    $firstEntry = [regex]::Match($existing, '(?m)^## ')
+    if ($firstEntry.Success) {
+      $merged = $existing.Substring(0, $firstEntry.Index) + $entry + $existing.Substring($firstEntry.Index)
+    } else { $merged = $entry + $existing }
+    Set-Content -Path $journal -Value $merged -Encoding utf8
+    $wrote = $true
   }
-  Set-Content -Path $journal -Value $merged -Encoding utf8
-  return $true
+
+  if ($data.lesson -and $data.lesson.tech) {
+    $tech = ("" + $data.lesson.tech) -replace '[^A-Za-z0-9-]', '-'
+    $li = "$Brain\lessons\_inbox"; New-Item -ItemType Directory -Force $li | Out-Null
+    $fm = "---`ntype: lesson-draft`nstatus: draft`ntech: $tech`nsource_project: $Slug`nsource_session: $SessionId`ndate: $date`n---`n`n"
+    Set-Content -Path "$li\$date-$tech.md" -Value ($fm + ("" + $data.lesson.body)) -Encoding utf8
+  }
+
+  if ($data.feature -and $data.feature.name) {
+    $name = ("" + $data.feature.name) -replace '[^A-Za-z0-9-]', '-'
+    $kind = "" + $data.feature.kind
+    $fi = "$Brain\projects\$Slug\features\_inbox"; New-Item -ItemType Directory -Force $fi | Out-Null
+    $updates = if ($kind -eq 'UPDATE') { "updates: $name`n" } else { "" }
+    $fm = "---`ntype: feature-draft`nstatus: draft`nfeature: $name`n${updates}source_session: $SessionId`ndate: $date`n---`n`n"
+    Set-Content -Path "$fi\$date-$name.md" -Value ($fm + ("" + $data.feature.body)) -Encoding utf8
+  }
+
+  return $wrote
 }
 
 # --- Feature matching: which existing feature note (if any) does this session's work belong to?
@@ -221,69 +243,4 @@ function Find-MatchingFeature {
     if ($count -gt $bestCount) { $bestCount = $count; $best = $f.BaseName }
   }
   return $best
-}
-
-# --- Feature curator: stage a feature-note DRAFT (new or update) to features/_inbox/.
-# Deterministic matcher picks the target; the LLM only writes prose. Best-effort, never writes
-# directly to features/. ---
-function Invoke-FeatureCurator {
-  param(
-    [string]$Brain, [string]$Slug, [string]$SessionId,
-    [string]$TranscriptPath, [string[]]$Files, [string]$Branch
-  )
-  try {
-    if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return }
-    $convo = Get-CondensedTranscript -Path $TranscriptPath
-    if (-not $convo) { return }
-    $match = Find-MatchingFeature -Brain $Brain -Slug $Slug -Files $Files
-    $branchHint = ($Branch -replace '^feat/|^feature/', '')
-    if ($match) {
-      $instr = "This session continued the existing feature '$match'. If something material about how it's built changed, output:`nUPDATE: $match`n<concise markdown: What changed / How it's built>`nIf nothing material changed, output exactly: NONE"
-    } else {
-      $instr = "If this session built a coherent, nameable feature worth an as-built wiki note, output:`nFEATURE: <kebab-name>`n<concise markdown: What it does / How it's built>`nIf not, output exactly: NONE. Prefer the name '$branchHint' if it fits."
-    }
-    $env:BRAIN_CAPTURE_ACTIVE = "1"
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    if ($env:BRAIN_CLAUDE_SHIM) { $out = $env:BRAIN_CLAUDE_SHIM } else { $out = ($convo | claude -p $instr 2>$null) -join "`n" }
-    $out = $out.Trim()
-    if (-not $out -or $out -match '^\s*NONE\s*$') { return }
-    $m = [regex]::Match($out, '(?m)^(UPDATE|FEATURE):\s*(.+?)\s*$')
-    if (-not $m.Success) { return }
-    $kind = $m.Groups[1].Value
-    $name = ($m.Groups[2].Value -replace '[^A-Za-z0-9-]', '-').ToLower()
-    $inbox = "$Brain\projects\$Slug\features\_inbox"
-    New-Item -ItemType Directory -Force $inbox | Out-Null
-    $date = Get-Date -Format "yyyy-MM-dd"
-    $updates = if ($kind -eq 'UPDATE') { "updates: $name`n" } else { "" }
-    $fm = "---`ntype: feature-draft`nstatus: draft`nfeature: $name`n${updates}source_session: $SessionId`ndate: $date`n---`n`n"
-    Set-Content -Path "$inbox\$date-$name.md" -Value ($fm + $out) -Encoding utf8
-  } catch {}
-}
-
-# --- Gotcha detector: ask the summarizer whether a non-obvious, costly bug occurred; if so,
-# stage a DRAFT lesson in lessons/_inbox/ (never in lessons/ — global rule). Best-effort. ---
-function Invoke-GotchaDraft {
-  param([string]$Brain, [string]$Slug, [string]$SessionId, [string]$TranscriptPath)
-  try {
-    if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return }
-    $convo = Get-CondensedTranscript -Path $TranscriptPath
-    if (-not $convo) { return }
-    $prompt = "Review this session. If it contained a NON-OBVIOUS, costly-to-track-down technical gotcha worth remembering, output a lesson draft as exactly:`nLESSON: <kebab-tech-name>`n- How to spot it: ...`n- The trap: ...`n- The fix: ...`nIf there was NO such gotcha, output exactly: NONE"
-
-    $env:BRAIN_CAPTURE_ACTIVE = "1"
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    if ($env:BRAIN_CLAUDE_SHIM) { $out = $env:BRAIN_CLAUDE_SHIM } else { $out = ($convo | claude -p $prompt 2>$null) -join "`n" }
-    $out = $out.Trim()
-    if (-not $out -or $out -match '^\s*NONE\s*$') { return }
-    $m = [regex]::Match($out, '(?m)^LESSON:\s*(.+?)\s*$')
-    if (-not $m.Success) { return }
-    $tech = ($m.Groups[1].Value -replace '[^A-Za-z0-9-]', '-').ToLower()
-
-    $inbox = "$Brain\lessons\_inbox"
-    New-Item -ItemType Directory -Force $inbox | Out-Null
-    $date = Get-Date -Format "yyyy-MM-dd"
-    $file = "$inbox\$date-$tech.md"
-    $fm = "---`ntype: lesson-draft`nstatus: draft`ntech: $tech`nsource_project: $Slug`nsource_session: $SessionId`ndate: $date`n---`n`n"
-    Set-Content -Path $file -Value ($fm + $out) -Encoding utf8
-  } catch {}
 }

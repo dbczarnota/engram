@@ -1,6 +1,6 @@
 # Integration test: capture.ps1 writes a journal entry for a KNOWN project.
-# Uses a throwaway BRAIN_HOME and a fake `claude` shim so nothing real is touched
-# and no real LLM call is made.
+# Uses a throwaway BRAIN_HOME + BRAIN_SUMMARIZE_SHIM (canned JSON) and BRAIN_SEM_DIR pointing at the
+# real semantic dir, so `python -m summarize` runs but hits no live backend.
 $ErrorActionPreference = "Stop"
 $here   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script = Join-Path $here "capture.ps1"
@@ -31,12 +31,10 @@ try {
   )
   Set-Content -Path "$tmp\transcript.jsonl" -Value $tlines -Encoding utf8
 
-  # fake `claude` shim that ignores stdin and prints a canned summary
-  "@echo off`r`necho - integration summary bullet" | Set-Content "$tmp\bin\claude.cmd" -Encoding ascii
-
   # --- run the hook as a child process (inherits env we set here) ---
   $env:BRAIN_HOME = $tmp
-  $env:PATH       = "$tmp\bin;$env:PATH"
+  $env:BRAIN_SEM_DIR = (Join-Path $here "..\_meta\semantic" | Resolve-Path).Path
+  $env:BRAIN_SUMMARIZE_SHIM = '{"journal":"- integration summary bullet"}'
   $payload = @{ cwd = $cwd; transcript_path = "$tmp\transcript.jsonl"; session_id = "itest" } | ConvertTo-Json -Compress
   $out = $payload | pwsh -NoProfile -File $script 2>&1
   if ($LASTEXITCODE -ne 0) { throw "hook exited $LASTEXITCODE : $out" }
@@ -45,9 +43,9 @@ try {
   if ($journal -notmatch "integration summary bullet") { throw "journal missing summary. Content:`n$journal" }
   if ($journal -notmatch "session itest")              { throw "journal missing session header. Content:`n$journal" }
 
-  "PASS: hook resolved project, called (stubbed) claude, prepended journal entry"
+  "PASS: hook resolved project, summarized (shim), prepended journal entry"
 }
 finally {
-  Remove-Item Env:\BRAIN_HOME -ErrorAction SilentlyContinue
+  Remove-Item Env:\BRAIN_HOME, Env:\BRAIN_SEM_DIR, Env:\BRAIN_SUMMARIZE_SHIM -ErrorAction SilentlyContinue
   if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 }

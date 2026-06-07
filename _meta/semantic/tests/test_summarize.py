@@ -1,0 +1,66 @@
+from summarize import (
+    ClaudeCliSummarizer, OllamaSummarizer,
+    build_capture_prompt, build_summarizer, parse_capture_json, run_capture,
+)
+
+
+def test_parse_capture_json_fenced_plain_and_malformed():
+    assert parse_capture_json('```json\n{"journal":"- x"}\n```')["journal"] == "- x"
+    assert parse_capture_json('{"a":1}') == {"a": 1}
+    assert parse_capture_json("not json") == {}
+    assert parse_capture_json("[1,2]") == {}
+
+
+def test_build_capture_prompt_reflects_lang_and_match():
+    _, u = build_capture_prompt("fact-gate", "feat/x", "Polish")
+    assert "Polish" in u and "UPDATE" in u and "fact-gate" in u
+    _, u2 = build_capture_prompt("", "feat/new-thing", "English")
+    assert "FEATURE" in u2 and "new-thing" in u2
+
+
+class _Fake:
+    name = "fake"
+    def __init__(self, out): self._out = out
+    def generate(self, system, user): return self._out
+
+
+def test_run_capture_roundtrip():
+    out = '```json\n{"journal":"- did x","lesson":null,"feature":{"kind":"FEATURE","name":"y","body":"## What"}}\n```'
+    d = run_capture(_Fake(out), "transcript", "", "feat/y", "English")
+    assert d["journal"] == "- did x" and d["feature"]["name"] == "y" and d["lesson"] is None
+
+
+def test_build_summarizer_selection(monkeypatch):
+    monkeypatch.setenv("BRAIN_CAPTURE_PROVIDER", "ollama")
+    monkeypatch.setenv("BRAIN_CAPTURE_MODEL", "qwen2.5")
+    s = build_summarizer()
+    assert isinstance(s, OllamaSummarizer) and s.name == "ollama:qwen2.5"
+    monkeypatch.setenv("BRAIN_CAPTURE_PROVIDER", "claude-cli")
+    monkeypatch.setenv("BRAIN_CAPTURE_MODEL", "")
+    assert isinstance(build_summarizer(), ClaudeCliSummarizer)
+
+
+def test_ollama_request_shaping(monkeypatch):
+    import json as _j
+    captured = {}
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return _j.dumps({"response": '{"journal":"- ok"}'}).encode()
+    def fake_urlopen(req, timeout=0):
+        captured["url"] = req.full_url
+        captured["body"] = _j.loads(req.data)
+        return _Resp()
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    out = OllamaSummarizer("qwen2.5", "http://h:1").generate("sys", "usr")
+    assert captured["url"] == "http://h:1/api/generate"
+    assert captured["body"]["model"] == "qwen2.5" and captured["body"]["system"] == "sys"
+    assert parse_capture_json(out)["journal"] == "- ok"
+
+
+def test_normalize_capture_journal_list_to_string():
+    from summarize import normalize_capture
+    assert normalize_capture({"journal": ["- a", "- b"]})["journal"] == "- a\n- b"
+    assert normalize_capture({"journal": None})["journal"] == ""
+    assert normalize_capture({"journal": "- x"})["journal"] == "- x"
+    assert normalize_capture("nope") == {}

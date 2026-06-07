@@ -40,10 +40,10 @@ status: active
     (@{ type = "assistant"; message = @{ role = "assistant"; content = @(@{ type = "text"; text = "did the thing" }) } } | ConvertTo-Json -Compress -Depth 6)
   )
   Set-Content -Path "$tmp\transcript.jsonl" -Value $tlines -Encoding utf8
-  "@echo off`r`necho - fresh bullet" | Set-Content "$tmp\bin\claude.cmd" -Encoding ascii
 
   $env:BRAIN_HOME = $tmp
-  $env:PATH       = "$tmp\bin;$env:PATH"
+  $env:BRAIN_SEM_DIR = (Join-Path $here "..\_meta\semantic" | Resolve-Path).Path
+  $env:BRAIN_SUMMARIZE_SHIM = '{"journal":"- fresh bullet"}'
   $payload = @{ cwd = $cwd; transcript_path = "$tmp\transcript.jsonl"; session_id = "new" } | ConvertTo-Json -Compress
   $out = $payload | pwsh -NoProfile -File $script 2>&1
   if ($LASTEXITCODE -ne 0) { throw "hook exited $LASTEXITCODE : $out" }
@@ -65,6 +65,6 @@ status: active
   "PASS: entry inserted below frontmatter/title and above the prior entry"
 }
 finally {
-  Remove-Item Env:\BRAIN_HOME -ErrorAction SilentlyContinue
+  Remove-Item Env:\BRAIN_HOME, Env:\BRAIN_SEM_DIR, Env:\BRAIN_SUMMARIZE_SHIM -ErrorAction SilentlyContinue
   if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 }
