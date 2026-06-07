@@ -8,7 +8,7 @@ try {
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
-  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
+  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "C:\Users\czarn\Documents\A_PYTHON\brain" }
   $sid = "" + $hook.session_id
   if (-not $sid) { exit 0 }
 
@@ -39,6 +39,8 @@ try {
       $wrote = Invoke-JournalSummary -Brain $brain -Slug $slug -SessionId $sid `
         -TranscriptPath ("" + $hook.transcript_path) -Cwd $cwd -Partial
       if ($wrote) {
+        # Intentionally NOT setting summarized=true — partial entries may repeat across a long
+        # session; only the SessionEnd capture finalizes (sets summarized) to block duplicate fires.
         Invoke-GotchaDraft -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path)
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "turns" -Value 0
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "committed" -Value $false
