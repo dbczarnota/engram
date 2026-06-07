@@ -8,7 +8,7 @@ try {
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
-  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "C:\Users\czarn\Documents\A_PYTHON\brain" }
+  $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
   $sid = "" + $hook.session_id
   if (-not $sid) { exit 0 }
 
