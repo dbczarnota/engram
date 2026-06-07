@@ -35,6 +35,10 @@ try {
     Set-ScratchFlag -Brain $brain -SessionId $sid -Name "summarized" -Value $true
     & $log "wrote journal entry: $slug ($sid)"
     Invoke-GotchaDraft -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path)
+    $branch = ""
+    try { $branch = (& git -C ("" + $hook.cwd) rev-parse --abbrev-ref HEAD 2>$null) -join "" } catch {}
+    $files = @((Get-SessionScratch -Brain $brain -SessionId $sid).files)
+    Invoke-FeatureCurator -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Files $files -Branch $branch
   } else {
     & $log "bail: no entry written ($slug $sid)"; exit 0
   }

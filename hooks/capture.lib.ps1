@@ -197,6 +197,68 @@ function Invoke-JournalSummary {
   return $true
 }
 
+# --- Feature matching: which existing feature note (if any) does this session's work belong to?
+# Deterministic — intersects session-touched files with each feature note's `files:` list by suffix.
+# Returns the feature's basename (slug) with the most overlap, or $null. ---
+function Find-MatchingFeature {
+  param([string]$Brain, [string]$Slug, [string[]]$Files)
+  $dir = "$Brain\projects\$Slug\features"
+  if (-not (Test-Path $dir)) { return $null }
+  $sessionFiles = @(@($Files) | ForEach-Object { ($_ -replace '\\', '/').ToLower() })
+  if ($sessionFiles.Count -eq 0) { return $null }
+  $best = $null; $bestCount = 0
+  foreach ($f in Get-ChildItem $dir -Filter *.md -ErrorAction SilentlyContinue) {
+    $raw = Get-Content $f.FullName -Raw
+    $line = [regex]::Match($raw, '(?m)^files:\s*(.+)$')
+    if (-not $line.Success) { continue }
+    $featFiles = [regex]::Matches($line.Groups[1].Value, '"([^"]+)"') |
+      ForEach-Object { ($_.Groups[1].Value -replace '\\', '/').ToLower() }
+    $count = 0
+    foreach ($ff in $featFiles) {
+      if (@($sessionFiles | Where-Object { $_.EndsWith($ff) }).Count -gt 0) { $count++ }
+    }
+    if ($count -gt $bestCount) { $bestCount = $count; $best = $f.BaseName }
+  }
+  return $best
+}
+
+# --- Feature curator: stage a feature-note DRAFT (new or update) to features/_inbox/.
+# Deterministic matcher picks the target; the LLM only writes prose. Best-effort, never writes
+# directly to features/. ---
+function Invoke-FeatureCurator {
+  param(
+    [string]$Brain, [string]$Slug, [string]$SessionId,
+    [string]$TranscriptPath, [string[]]$Files, [string]$Branch
+  )
+  try {
+    if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return }
+    $convo = Get-CondensedTranscript -Path $TranscriptPath
+    if (-not $convo) { return }
+    $match = Find-MatchingFeature -Brain $Brain -Slug $Slug -Files $Files
+    $branchHint = ($Branch -replace '^feat/|^feature/', '')
+    if ($match) {
+      $instr = "This session continued the existing feature '$match'. If something material about how it's built changed, output:`nUPDATE: $match`n<concise markdown: What changed / How it's built>`nIf nothing material changed, output exactly: NONE"
+    } else {
+      $instr = "If this session built a coherent, nameable feature worth an as-built wiki note, output:`nFEATURE: <kebab-name>`n<concise markdown: What it does / How it's built>`nIf not, output exactly: NONE. Prefer the name '$branchHint' if it fits."
+    }
+    $env:BRAIN_CAPTURE_ACTIVE = "1"
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    if ($env:BRAIN_CLAUDE_SHIM) { $out = $env:BRAIN_CLAUDE_SHIM } else { $out = ($convo | claude -p $instr 2>$null) -join "`n" }
+    $out = $out.Trim()
+    if (-not $out -or $out -match '^\s*NONE\s*$') { return }
+    $m = [regex]::Match($out, '(?m)^(UPDATE|FEATURE):\s*(.+?)\s*$')
+    if (-not $m.Success) { return }
+    $kind = $m.Groups[1].Value
+    $name = ($m.Groups[2].Value -replace '[^A-Za-z0-9-]', '-').ToLower()
+    $inbox = "$Brain\projects\$Slug\features\_inbox"
+    New-Item -ItemType Directory -Force $inbox | Out-Null
+    $date = Get-Date -Format "yyyy-MM-dd"
+    $updates = if ($kind -eq 'UPDATE') { "updates: $name`n" } else { "" }
+    $fm = "---`ntype: feature-draft`nstatus: draft`nfeature: $name`n${updates}source_session: $SessionId`ndate: $date`n---`n`n"
+    Set-Content -Path "$inbox\$date-$name.md" -Value ($fm + $out) -Encoding utf8
+  } catch {}
+}
+
 # --- Gotcha detector: ask the summarizer whether a non-obvious, costly bug occurred; if so,
 # stage a DRAFT lesson in lessons/_inbox/ (never in lessons/ — global rule). Best-effort. ---
 function Invoke-GotchaDraft {

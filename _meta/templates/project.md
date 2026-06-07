@@ -21,6 +21,11 @@ One paragraph.
 ## Observability
 - logfire project: ` ` · db: ` ` (credentials live in the repo's own config, not here)
 
+## Features
+```dataview
+LIST WHERE startswith(file.path, this.file.folder + "/features/") AND type = "feature" SORT file.name ASC
+```
+
 ## Specs & plans
 
 **Specs**

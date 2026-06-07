@@ -144,6 +144,8 @@ def _note_in_scope(path: str, scope: list[str], include_project_wiki: bool) -> b
         stem = Path(path).stem
         if stem == parts[-2] and stem not in ("journal", "todos"):
             return True
+        if "features" in parts:  # feature notes (features/_inbox already excluded above)
+            return True
     return False
 
 

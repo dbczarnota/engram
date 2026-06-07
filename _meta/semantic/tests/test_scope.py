@@ -18,3 +18,15 @@ def test_scope_excludes_journals_todos_inbox():
 
 def test_project_wiki_off_when_disabled():
     assert not _note_in_scope("projects/scrape2llm/scrape2llm.md", SCOPE, False)
+
+
+def test_scope_includes_feature_notes():
+    assert _note_in_scope("projects/x/features/fact-extraction.md", SCOPE, True)
+
+
+def test_scope_excludes_feature_inbox():
+    assert not _note_in_scope("projects/x/features/_inbox/2026-06-07-draft.md", SCOPE, True)
+
+
+def test_feature_off_when_wiki_disabled():
+    assert not _note_in_scope("projects/x/features/fact-extraction.md", SCOPE, False)
