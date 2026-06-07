@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -14,6 +15,7 @@ from typing import Protocol, runtime_checkable
 @runtime_checkable
 class Summarizer(Protocol):
     name: str
+    last_usage: dict  # {"in": int, "out": int, "cost": float} from the most recent generate()
     def generate(self, system: str, user: str) -> str: ...
 
 
@@ -78,6 +80,7 @@ class GeminiSummarizer:
         self._client = genai.Client(api_key=key)
         self.model = model
         self.name = f"gemini:{model}"
+        self.last_usage = {"in": 0, "out": 0, "cost": 0.0}
 
     def generate(self, system: str, user: str) -> str:
         from google.genai import types
@@ -86,6 +89,13 @@ class GeminiSummarizer:
             contents=user,
             config=types.GenerateContentConfig(system_instruction=system, temperature=0.2),
         )
+        um = getattr(resp, "usage_metadata", None)
+        if um:
+            self.last_usage = {
+                "in": int(getattr(um, "prompt_token_count", 0) or 0),
+                "out": int(getattr(um, "candidates_token_count", 0) or 0),
+                "cost": 0.0,
+            }
         return resp.text or ""
 
 
@@ -93,6 +103,7 @@ class ClaudeCliSummarizer:
     def __init__(self, model: str | None = None) -> None:
         self.model = model
         self.name = f"claude-cli:{model or 'default'}"
+        self.last_usage = {"in": 0, "out": 0, "cost": 0.0}
 
     def generate(self, system: str, user: str) -> str:
         # Resolve the real executable: on Windows `claude` is a `claude.CMD` npm shim that bare
@@ -100,14 +111,29 @@ class ClaudeCliSummarizer:
         exe = shutil.which("claude")
         if not exe:
             return ""
-        args = [exe, "-p", system]
+        # --output-format json gives a {result, usage, total_cost_usd} envelope for token/cost tracking.
+        args = [exe, "-p", system, "--output-format", "json"]
         if self.model:
             args += ["--model", self.model]
         try:
             r = subprocess.run(args, input=user, capture_output=True, text=True, encoding="utf-8")
         except OSError:
             return ""
-        return r.stdout or ""
+        try:
+            obj = json.loads(r.stdout)
+        except Exception:
+            return r.stdout or ""  # fall back to raw text if not the expected envelope
+        u = obj.get("usage") or {}
+        in_tok = sum(
+            int(u.get(k, 0) or 0)
+            for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+        )
+        self.last_usage = {
+            "in": in_tok,
+            "out": int(u.get("output_tokens", 0) or 0),
+            "cost": float(obj.get("total_cost_usd", 0.0) or 0.0),
+        }
+        return obj.get("result", "") or ""
 
 
 class OllamaSummarizer:
@@ -115,6 +141,7 @@ class OllamaSummarizer:
         self.model = model
         self.host = host or os.environ.get("BRAIN_OLLAMA_HOST", "http://localhost:11434")
         self.name = f"ollama:{model}"
+        self.last_usage = {"in": 0, "out": 0, "cost": 0.0}
 
     def generate(self, system: str, user: str) -> str:
         import urllib.request
@@ -125,7 +152,13 @@ class OllamaSummarizer:
             f"{self.host}/api/generate", data=body, headers={"Content-Type": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=180) as resp:  # noqa: S310
-            return json.loads(resp.read().decode("utf-8")).get("response", "")
+            data = json.loads(resp.read().decode("utf-8"))
+        self.last_usage = {
+            "in": int(data.get("prompt_eval_count", 0) or 0),
+            "out": int(data.get("eval_count", 0) or 0),
+            "cost": 0.0,
+        }
+        return data.get("response", "")
 
 
 def build_summarizer() -> Summarizer:
@@ -160,6 +193,24 @@ def run_capture(summarizer: Summarizer, transcript: str, matched_feature: str, b
     return normalize_capture(parse_capture_json(summarizer.generate(system, user + transcript)))
 
 
+def _log_usage(vault_root: Path, name: str, usage: dict) -> None:
+    """Append one capture token-usage record to _meta/state/capture-usage.jsonl. Best-effort."""
+    try:
+        d = vault_root / "_meta" / "state"
+        d.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "name": name,
+            "in": int(usage.get("in", 0)),
+            "out": int(usage.get("out", 0)),
+            "cost": round(float(usage.get("cost", 0.0)), 6),
+        }
+        with (d / "capture-usage.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--feature-match", default="")
@@ -172,7 +223,9 @@ def main() -> None:
         result = normalize_capture(parse_capture_json(shim))
     else:
         try:
-            result = run_capture(build_summarizer(), transcript, args.feature_match, args.branch, args.lang)
+            summ = build_summarizer()
+            result = run_capture(summ, transcript, args.feature_match, args.branch, args.lang)
+            _log_usage(_vault_root(), summ.name, getattr(summ, "last_usage", {}))
         except Exception:
             result = {}
     sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))

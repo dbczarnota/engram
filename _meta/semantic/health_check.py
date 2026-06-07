@@ -4,16 +4,44 @@ the pure helpers below are unit-tested in tests/test_health_check.py."""
 from __future__ import annotations
 
 import collections
+import datetime as _dt
 import glob
 import json
 import os
 import re
 import sys
 import time
+from pathlib import Path
 
 BASE = os.path.expanduser(r"~\.claude\projects")
 FILES = glob.glob(os.path.join(BASE, "*", "*.jsonl"))
 MIN_PROMPTS = 3
+VAULT = Path(__file__).resolve().parents[2]
+
+
+def capture_usage(vault_root: Path, days: int) -> dict:
+    """Totals from _meta/state/capture-usage.jsonl within the last `days`."""
+    out = {"calls": 0, "in_tok": 0, "out_tok": 0, "cost": 0.0}
+    log = vault_root / "_meta" / "state" / "capture-usage.jsonl"
+    if not log.exists():
+        return out
+    cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
+    for line in log.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            r = json.loads(line)
+            ts = _dt.datetime.strptime(r["ts"], "%Y-%m-%dT%H:%M:%S")
+        except Exception:
+            continue
+        if ts < cutoff:
+            continue
+        out["calls"] += 1
+        out["in_tok"] += int(r.get("in", 0) or 0)
+        out["out_tok"] += int(r.get("out", 0) or 0)
+        out["cost"] += float(r.get("cost", 0.0) or 0.0)
+    return out
 DEFAULT_DAYS = 30
 
 
@@ -268,6 +296,12 @@ def main(days: int = DEFAULT_DAYS):
     print("--- NOTES SURFACED BY AUTO-RECALL ---")
     for p, c in surfaced.most_common(20):
         print(f"  {c:4d}  {p}")
+    print()
+    cu = capture_usage(VAULT, days)
+    print("--- CAPTURE COST (auto-journal/lesson/feature summarizer) ---")
+    print(f"calls / in-tok / out-tok / $   : {cu['calls']} / {cu['in_tok']} / {cu['out_tok']} / ${cu['cost']:.4f}")
+    if cu["calls"]:
+        print(f"avg $/call                     : ${cu['cost'] / cu['calls']:.4f}")
 
 
 if __name__ == "__main__":
