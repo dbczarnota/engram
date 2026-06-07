@@ -22,18 +22,32 @@ One paragraph.
 - logfire project: ` ` · db: ` ` (credentials live in the repo's own config, not here)
 
 ## Features
-```dataview
-LIST WHERE startswith(file.path, this.file.folder + "/features/") AND type = "feature" SORT file.name ASC
+```base
+filters:
+  and:
+    - file.inFolder(this.file.folder + "/features")
+    - type == "feature"
+views:
+  - type: list
+    name: Features
 ```
 
 ## Specs & plans
 
 **Specs**
-```dataview
-LIST WHERE startswith(file.path, this.file.folder + "/specs/") SORT file.name DESC
+```base
+filters:
+  file.inFolder(this.file.folder + "/specs")
+views:
+  - type: list
+    name: Specs
 ```
 
 **Plans**
-```dataview
-LIST WHERE startswith(file.path, this.file.folder + "/plans/") SORT file.name DESC
+```base
+filters:
+  file.inFolder(this.file.folder + "/plans")
+views:
+  - type: list
+    name: Plans
 ```

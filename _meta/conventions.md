@@ -23,7 +23,11 @@ This vault is the single source of truth for cross-project knowledge. It is read
 - `lessons/` — cross-project gotchas, one file per tech. Never solve the same problem twice.
 - `research/` — saved research outputs / papers, referenced explicitly.
 - `archive/` — finished projects, excluded from recall & dashboards by default.
-- `dashboards/` — Dataview views for humans.
+- `dashboards/` — human views: **Obsidian Bases** (`.base`) for project/standard tables;
+  **Dataview** for the cross-file todo aggregation in `dashboards/todos.md` — both the active
+  list and the `#idea`/`#deferred` someday/maybe list (Bases aggregates notes, not checkbox lines).
+- `todos.md` (vault root) — inbox for **non-project** todos; project todos stay in
+  `projects/<slug>/todos.md`. Both feed the global task view in `dashboards/todos.md`.
 - `_meta/` — conventions, templates, the recall index, and the project-path map.
 
 ## ADR vs Standard

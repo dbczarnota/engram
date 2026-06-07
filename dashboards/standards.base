@@ -1,0 +1,10 @@
+filters:
+  and:
+    - file.inFolder("standards")
+    - type == "standard"
+views:
+  - type: table
+    name: Standards
+    order:
+      - file.name
+      - date

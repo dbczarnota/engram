@@ -5,19 +5,31 @@ status: active
 date: 2026-05-25
 ---
 
-# 📌 Todos & Ideas (all projects)
+# 📌 Todos (all projects + inbox)
+
+Open checkboxes from every project's `todos.md`, the root `todos.md` inbox, and any
+other note (excluding `archive/`, `specs/`, `plans/`). This stays on **Dataview** —
+Bases aggregates notes, not checkbox lines, so it cannot reproduce this view.
 
 ```dataview
 TASK
-FROM "projects"
 WHERE !completed
+  AND !contains(file.folder, "archive")
+  AND !contains(file.path, "/specs/")
+  AND !contains(file.path, "/plans/")
 GROUP BY file.folder
 ```
 
-## Deferred / idea notes
+## Someday / maybe (`#idea` / `#deferred`)
+
+Open todos tagged as ideas or deferred, sifted out from the active list above. Stays on
+**Dataview** — it filters checkbox lines by their inline tag, which Bases cannot do.
+
 ```dataview
-LIST
-FROM #deferred OR #idea
-WHERE !contains(file.folder, "archive")
-SORT date DESC
+TASK
+WHERE !completed AND (contains(tags, "#idea") OR contains(tags, "#deferred"))
+  AND !contains(file.folder, "archive")
+  AND !contains(file.path, "/specs/")
+  AND !contains(file.path, "/plans/")
+GROUP BY file.folder
 ```

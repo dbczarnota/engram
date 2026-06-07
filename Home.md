@@ -10,9 +10,9 @@ date: 2026-05-25
 Landing page. Open the graph view (left sidebar) to see project ↔ standard ↔ lesson connections.
 
 ## Dashboards
-- [[dashboards/projects]] — project status board
-- [[dashboards/todos]] — all deferred todos & ideas
-- [[dashboards/standards]] — standards index
+- [[dashboards/projects.base|projects]] — project status board (Bases)
+- [[dashboards/todos]] — open todos + someday/maybe (Dataview)
+- [[dashboards/standards.base|standards]] — standards index (Bases)
 
 ## Quick links
 - [[_meta/conventions]] — how this vault works

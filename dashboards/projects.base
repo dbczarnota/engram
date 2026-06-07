@@ -1,0 +1,11 @@
+filters:
+  and:
+    - file.inFolder("projects")
+    - type == "project"
+views:
+  - type: table
+    name: Projects
+    order:
+      - file.name
+      - status
+      - date
