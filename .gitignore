@@ -13,6 +13,10 @@ Thumbs.db
 hooks/hook-fired.log
 hooks/capture.log
 
+# memory-loop runtime state — volatile per-machine session scratch + recall hit log
+_meta/state/session-*.json
+_meta/state/recall-log.jsonl
+
 # local per-machine Claude Code settings
 .claude/settings.local.json
 
