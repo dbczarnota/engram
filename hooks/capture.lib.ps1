@@ -153,6 +153,7 @@ function Test-ShouldSummarize {
 # Writes the journal entry + stages lesson/feature drafts to _inbox. Best-effort. ---
 function Invoke-Capture {
   param([string]$Brain, [string]$Slug, [string]$SessionId, [string]$TranscriptPath, [string]$Cwd, [switch]$Partial)
+  try {
   if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return $false }
   $journal = "$Brain\projects\$Slug\journal.md"
   if (-not (Test-Path $journal)) { return $false }
@@ -216,7 +217,10 @@ function Invoke-Capture {
     Set-Content -Path "$fi\$date-$name.md" -Value ($fm + ("" + $data.feature.body)) -Encoding utf8
   }
 
+  # $wrote tracks ONLY whether a journal entry was written (it drives the `summarized` dedup flag);
+  # lesson/feature drafts are a side effect and intentionally do not mark the session summarized.
   return $wrote
+  } catch { return $false }
 }
 
 # --- Feature matching: which existing feature note (if any) does this session's work belong to?

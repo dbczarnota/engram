@@ -5,8 +5,9 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\capture.lib.ps1"
 try {
-  # Recursion guard: the `claude -p` call below spawns a sub-session whose own SessionEnd
-  # re-invokes this hook. If we're already inside a capture, no-op immediately.
+  # Recursion guard: capture summarization can spawn a sub-session (e.g. the claude-cli backend),
+  # whose own SessionEnd would re-invoke this hook. If we're already inside a capture, no-op.
+  # (BRAIN_CAPTURE_ACTIVE is set by Invoke-Capture before it calls the summarizer.)
   if ($env:BRAIN_CAPTURE_ACTIVE) { exit 0 }
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
