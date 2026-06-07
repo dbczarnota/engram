@@ -20,6 +20,7 @@ def test_build_capture_prompt_reflects_lang_and_match():
 
 class _Fake:
     name = "fake"
+    last_usage = {"in": 0, "out": 0, "cost": 0.0}
     def __init__(self, out): self._out = out
     def generate(self, system, user): return self._out
 
