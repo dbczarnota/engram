@@ -36,9 +36,9 @@ def test_h4_body_stays_in_enclosing_h3_chunk():
     assert "more deep" in deep.text
 
 
-def test_frontmatter_kept_in_preheading_chunk():
+def test_frontmatter_stripped_from_preheading_chunk():
     chunks = chunk_markdown("standards/x.md", SAMPLE)
-    assert "type: standard" in chunks[0].text
+    assert "type: standard" not in chunks[0].text
     assert "intro line before any heading" in chunks[0].text
 
 

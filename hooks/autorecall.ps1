@@ -15,6 +15,8 @@ try {
   $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
   $sem = "$brain\_meta\semantic"
 
+  try { . "$PSScriptRoot\capture.lib.ps1"; Add-ScratchPrompt -Brain $brain -SessionId $sid -Prompt $prompt } catch {}
+
   # Honor the toggle before spawning anything.
   $cfgPath = "$brain\_meta\engram.json"
   if (Test-Path $cfgPath) {

@@ -6,6 +6,13 @@ from dataclasses import dataclass
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$")
 
+_FRONTMATTER_RE = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n?", re.DOTALL)
+
+
+def strip_frontmatter(content: str) -> str:
+    """Drop a leading YAML frontmatter block so it is never indexed or surfaced."""
+    return _FRONTMATTER_RE.sub("", content, count=1)
+
 
 @dataclass(frozen=True)
 class Chunk:
@@ -30,6 +37,7 @@ def chunk_markdown(path: str, content: str) -> list[Chunk]:
     H4+ stay as body inside the enclosing H1–H3 chunk. Content before the first
     heading becomes a chunk with heading_path "". Empty-body chunks are dropped.
     """
+    content = strip_frontmatter(content)
     chunks: list[Chunk] = []
     stack: list[tuple[int, str]] = []  # (level, title) for current H1–H3 path
     body: list[str] = []

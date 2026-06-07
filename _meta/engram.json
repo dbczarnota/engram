@@ -1,7 +1,8 @@
 {
   "semantic":   { "enabled": true },
-  "autoRecall": { "enabled": true, "topN": 3, "minScore": 0.30, "tokenBudget": 200,
-                  "scope": ["standards", "lessons", "decisions"] },
-  "graphify":   { "enabled": false },
+  "autoRecall": { "enabled": true, "topN": 3, "minScore": 0.30, "tokenBudget": 350,
+                  "scope": ["standards", "lessons"], "includeProjectWiki": true, "tier2Min": 0.55 },
+  "capture":    { "stopThreshold": 60, "minTurns": 6 },
+  "graphify":   { "enabled": true },
   "journal":    { "language": "English" }
 }

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 from pathlib import Path
 
 import sqlite_vec
@@ -13,8 +15,10 @@ _DEFAULT_AR = {
     "enabled": True,
     "topN": 3,
     "minScore": 0.30,
-    "tokenBudget": 200,
-    "scope": ["standards", "lessons", "decisions"],
+    "tokenBudget": 350,
+    "scope": ["standards", "lessons"],
+    "includeProjectWiki": True,
+    "tier2Min": 0.55,
 }
 
 _CUES = {
@@ -129,16 +133,25 @@ def is_substantive(prompt: str) -> bool:
     return any(w in _CUES for w in words)
 
 
-def _in_scope(path: str, scope: list[str]) -> bool:
-    parts = set(Path(path).parts)
-    return any(seg in parts for seg in scope)
+def _note_in_scope(path: str, scope: list[str], include_project_wiki: bool) -> bool:
+    parts = Path(path).parts
+    if "_inbox" in parts:
+        return False
+    if any(seg in parts for seg in scope):
+        return True
+    # project wiki note: projects/<slug>/<slug>.md (filename stem == parent dir name)
+    if include_project_wiki and len(parts) >= 3 and parts[0] == "projects":
+        stem = Path(path).stem
+        if stem == parts[-2] and stem not in ("journal", "todos"):
+            return True
+    return False
 
 
 def _row(con, cid: int):
     return con.execute("SELECT path, heading_path, text FROM chunks WHERE chunk_id=?", (cid,)).fetchone()
 
 
-def _fts_candidates(con, prompt: str, scope: list[str], k: int = 20) -> list[tuple[int, tuple]]:
+def _fts_candidates(con, prompt: str, scope: list[str], include_project_wiki: bool, k: int = 20) -> list[tuple[int, tuple]]:
     # Match only on meaningful terms and require >=2 of them to actually appear in the note, so a
     # single coincidental keyword (often a common/cue word) does not surface a loosely-related note.
     meaningful = _meaningful_terms(prompt)
@@ -152,7 +165,7 @@ def _fts_candidates(con, prompt: str, scope: list[str], k: int = 20) -> list[tup
     out: list[tuple[int, tuple]] = []
     for (cid,) in rows:
         r = _row(con, cid)
-        if not r or not _in_scope(r[0], scope):
+        if not r or not _note_in_scope(r[0], scope, include_project_wiki):
             continue
         text = f"{r[1]} {r[2]}".lower()  # heading + body
         if sum(1 for t in meaningful if t in text) >= need:
@@ -160,32 +173,48 @@ def _fts_candidates(con, prompt: str, scope: list[str], k: int = 20) -> list[tup
     return out
 
 
-def _vector_candidates(con, qvec, scope: list[str], min_score: float, k: int = 20):
+def _vector_candidates(con, qvec, scope: list[str], include_project_wiki: bool, min_score: float, k: int = 20):
     rows = con.execute(
         "SELECT chunk_id, distance FROM vec_chunks WHERE embedding MATCH ? AND k = ? ORDER BY distance",
         (sqlite_vec.serialize_float32(qvec), k),
     ).fetchall()
-    out: list[tuple[int, tuple]] = []
+    out: list[tuple[int, tuple, float]] = []
     for cid, dist in rows:
         score = 1.0 - float(dist)
         if score < min_score:
             continue
         r = _row(con, cid)
-        if r and _in_scope(r[0], scope):
-            out.append((cid, r))
+        if r and _note_in_scope(r[0], scope, include_project_wiki):
+            out.append((cid, r, score))
     return out
 
 
-def _format(rows_in_order: list[tuple], token_budget: int) -> str | None:
-    if not rows_in_order:
+_SENT_RE = re.compile(r"(.+?[.!?])(\s|$)")
+
+
+def _first_sentence(text: str) -> str:
+    clean = " ".join(text.split())
+    rule = re.search(r"\*\*Rule:\*\*\s*(.+?[.!?])", clean)
+    if rule:
+        return rule.group(1).strip()
+    m = _SENT_RE.search(clean)
+    return (m.group(1) if m else clean[:160]).strip()
+
+
+def _format_tiered(rows, token_budget: int) -> str | None:
+    """rows: list of (path, heading, text, score, tier). tier 2 => full chunk, tier 1 => pointer."""
+    if not rows:
         return None
     header = "Engram auto-recall — possibly relevant notes:"
     lines = [header]
-    char_budget = token_budget * 4  # ~4 chars/token proxy
+    char_budget = token_budget * 4
     used = len(header)
-    for path, heading, text in rows_in_order:
-        snippet = " ".join(text.split())[:80]
-        line = f"- {path} :: {heading} — {snippet}"
+    for path, heading, text, _score, tier in rows:
+        if tier >= 2:
+            body = " ".join(text.split())[:500]
+            line = f"- {path} :: {heading}\n  {body}"
+        else:
+            line = f"- {path} :: {heading} — {_first_sentence(text)}"
         if used + len(line) + 1 > char_budget and len(lines) > 1:
             break
         lines.append(line)
@@ -219,6 +248,23 @@ def _save_seen(vault_root: Path, session_id: str | None, seen: set[str]) -> None
         pass
 
 
+def _append_recall_log(vault_root: Path, *, prompt: str, paths: list[str], tier: int, score: float) -> None:
+    try:
+        d = vault_root / "_meta" / "state"
+        d.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "prompt_hash": hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:12],
+            "paths": paths,
+            "tier": tier,
+            "score": round(float(score), 3),
+        }
+        with (d / "recall-log.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def auto_recall(
     vault_root: Path,
     prompt: str,
@@ -227,9 +273,11 @@ def auto_recall(
     min_score: float,
     token_budget: int,
     scope: list[str],
+    include_project_wiki: bool = True,
     semantic_enabled: bool = True,
     session_id: str | None = None,
     embedder=None,
+    tier2_min: float = 0.55,
 ) -> str | None:
     """FTS-first proactive recall over scoped vault notes. Returns a hint or None.
     Best-effort: any failure returns None (never raises)."""
@@ -241,21 +289,23 @@ def auto_recall(
             return None
         con = connect(str(db))
 
-        fts = _fts_candidates(con, prompt, scope, k=20)
+        fts = _fts_candidates(con, prompt, scope, include_project_wiki, k=20)
         fts_ids = [cid for cid, _ in fts]
         strong_fts = fts_ids[:2]  # top-2 FTS = literal keyword confidence
 
         candidates: dict[int, tuple] = {cid: r for cid, r in fts if cid in strong_fts}
 
+        score_by_cid: dict[int, float] = {}
         vec_ids: list[int] = []
         if not strong_fts and semantic_enabled:  # escalate only when FTS is weak AND semantics are on
             from embedder import build_embedder
 
             emb = embedder or build_embedder()
             qvec = emb.embed_query(prompt)
-            vec = _vector_candidates(con, qvec, scope, min_score, k=20)
-            vec_ids = [cid for cid, _ in vec]
-            for cid, r in vec:
+            vec = _vector_candidates(con, qvec, scope, include_project_wiki, min_score, k=20)
+            vec_ids = [cid for cid, _, _s in vec]
+            for cid, r, score in vec:
+                score_by_cid[cid] = score
                 candidates.setdefault(cid, r)
 
         if not candidates:
@@ -276,7 +326,18 @@ def auto_recall(
         if not fresh:
             return None
         _save_seen(vault_root, session_id, seen | {r[0] for r in fresh})
-        return _format(fresh, token_budget)
+
+        # Build cid->row reverse map to look up tier per row
+        cid_by_row: dict[int, int] = {id(r): cid for cid, r in candidates.items()}
+        tiered_rows = []
+        for r in fresh:
+            cid = cid_by_row.get(id(r), -1)
+            vec_score = score_by_cid.get(cid, 0.0)
+            tier = 2 if (cid in strong_fts or vec_score >= tier2_min) else 1
+            path, heading, text = r
+            tiered_rows.append((path, heading, text, vec_score, tier))
+
+        return _format_tiered(tiered_rows, token_budget)
     except Exception:
         return None
 
@@ -297,6 +358,8 @@ def main() -> None:
         min_score=float(cfg["minScore"]),
         token_budget=int(cfg["tokenBudget"]),
         scope=list(cfg["scope"]),
+        include_project_wiki=bool(cfg.get("includeProjectWiki", True)),
+        tier2_min=float(cfg.get("tier2Min", 0.55)),
         semantic_enabled=load_semantic_enabled(vault_root),
         session_id=session_id,
         embedder=None,
@@ -305,6 +368,20 @@ def main() -> None:
         # Write raw UTF-8 bytes: the hint contains › and —, and the console codepage
         # (cp1252 on Windows) would otherwise mangle them. Avoids stdout.reconfigure quirks.
         sys.stdout.buffer.write((hint + "\n").encode("utf-8"))
+        # Parse surfaced paths from the hint for the recall log.
+        # Lines look like: "- path/to/note.md :: Heading — snippet" (tier1) or
+        #                   "- path/to/note.md :: Heading\n  body..." (tier2, no " — " after heading)
+        surfaced_paths: list[str] = []
+        hint_tier = 1
+        for line in hint.splitlines():
+            if line.startswith("- ") and " :: " in line:
+                path_part = line[2:].split(" :: ")[0]
+                surfaced_paths.append(path_part)
+                # tier2 lines have no " — " separator after the heading
+                if " — " not in line:
+                    hint_tier = 2
+        if surfaced_paths:
+            _append_recall_log(vault_root, prompt=prompt, paths=surfaced_paths, tier=hint_tier, score=0.0)
 
 
 if __name__ == "__main__":

@@ -69,6 +69,8 @@ def _iter_markdown(vault_root: Path) -> list[Path]:
         parts = rel.parts
         if parts[0] == "archive" or ".git" in parts:
             continue
+        if "_inbox" in parts:  # staged lesson drafts — never indexed until promoted
+            continue
         if parts[:2] == _SEMANTIC_DIR:  # excludes the tool dir, its .venv and .index
             continue
         out.append(p)
