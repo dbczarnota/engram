@@ -310,6 +310,18 @@ hooks/               SessionEnd capture + UserPromptSubmit auto-recall hooks (+ 
 standards/  lessons/  research/  projects/  archive/  dashboards/
 ```
 
+## Clean knowledge view in Obsidian
+
+Open the vault in Obsidian and you'd otherwise see the *infrastructure* too — `hooks/`, `commands/`,
+`_meta/`, `graphify-out/`, the `setup.*` scripts. The shipped `.obsidian/app.json` already adds those to
+Obsidian's **Excluded files** (`userIgnoreFilters`), so they drop out of search, the graph, and the quick
+switcher — your recall surfaces stay knowledge-only with zero plugins.
+
+Excluded files are still *dimmed-but-visible* in the file-explorer pane. To hide them from the tree
+entirely, install the **File Hider** community plugin (`OA-file-hider`) and hide the same folders
+(right-click → *Hide folder*). Its hidden list lives in the gitignored `.obsidian/plugins/`, so it's a
+per-machine choice, not shipped.
+
 ## Non-Windows
 
 The setup uses a Windows directory **junction** and a **PowerShell** hook. On macOS/Linux: replace the

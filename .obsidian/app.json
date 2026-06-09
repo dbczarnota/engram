@@ -1,0 +1,13 @@
+{
+  "userIgnoreFilters": [
+    "_meta/",
+    "hooks/",
+    "commands/",
+    "graphify-out/",
+    "CLAUDE.md",
+    "HOW-IT-WORKS.md",
+    "README.md",
+    "LICENSE",
+    "setup."
+  ]
+}
