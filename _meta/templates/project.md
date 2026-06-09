@@ -32,6 +32,20 @@ views:
     name: Features
 ```
 
+## Research
+
+Research specific to this project. General / cross-project research → [[dashboards/research]].
+
+```base
+filters:
+  and:
+    - file.inFolder(this.file.folder + "/research")
+    - type == "research"
+views:
+  - type: list
+    name: Research
+```
+
 ## Specs & plans
 
 **Specs**

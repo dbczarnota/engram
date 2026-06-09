@@ -13,6 +13,7 @@ Landing page. Open the graph view (left sidebar) to see project ↔ standard ↔
 - [[dashboards/projects.base|projects]] — project status board (Bases)
 - [[dashboards/todos]] — open todos + someday/maybe (Dataview)
 - [[dashboards/standards.base|standards]] — standards index (Bases)
+- [[dashboards/research.base|research]] — research across all projects (Bases)
 
 ## Quick links
 - [[_meta/conventions]] — how this vault works

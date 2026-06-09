@@ -18,12 +18,15 @@ This vault is the single source of truth for cross-project knowledge. It is read
 
 ## Folders
 - `projects/<slug>/` — one folder per project: `<slug>.md` (what/stack/status), `journal.md`
-  (session summaries, newest on top), `todos.md` (deferred todos & ideas), `specs/` + `plans/` (superpowers design docs — kept here, NOT in the project repo), `decisions/` (ADRs).
+  (session summaries, newest on top), `todos.md` (deferred todos & ideas), `specs/` + `plans/` (superpowers design docs — kept here, NOT in the project repo), `research/` (research notes specific to this one project), `decisions/` (ADRs).
 - `standards/` — cross-project rules ("how we always do X"). Living documents.
 - `lessons/` — cross-project gotchas, one file per tech. Never solve the same problem twice.
-- `research/` — saved research outputs / papers, referenced explicitly.
+- `research/` — the **general + cross-project** research catalog. Research that belongs to exactly
+  one project lives in `projects/<slug>/research/` instead (mirrors project-todos vs the root inbox);
+  research that spans projects or is project-agnostic stays here.
 - `archive/` — finished projects, excluded from recall & dashboards by default.
-- `dashboards/` — human views: **Obsidian Bases** (`.base`) for project/standard tables;
+- `dashboards/` — human views: **Obsidian Bases** (`.base`) for project/standard tables and the
+  cross-vault research aggregation in `dashboards/research.base` (all `type: research`, excl. `archive/`);
   **Dataview** for the cross-file todo aggregation in `dashboards/todos.md` — both the active
   list and the `#idea`/`#deferred` someday/maybe list (Bases aggregates notes, not checkbox lines).
 - `todos.md` (vault root) — inbox for **non-project** todos; project todos stay in

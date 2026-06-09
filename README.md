@@ -81,9 +81,12 @@ compounds instead of decaying.
 - **Standards** (`standards/`) — "how we always do X", applied across projects. Decide once, reuse forever.
 - **Lessons** (`lessons/`) — hard-won, tech-specific gotchas. Never debug the same trap twice.
 - **Per-project state** (`projects/<slug>/`) — what the project is, a `journal.md` of session summaries
-  (newest on top), and `todos.md` for deferred ideas. Specs/plans live here too, not in the code repo.
-- **Research** (`research/`) — write-ups and references you cite explicitly.
-- **Dashboards + graph** (Obsidian Dataview) — a browsable picture of projects ↔ standards ↔ lessons.
+  (newest on top), and `todos.md` for deferred ideas. Specs/plans and project-specific `research/` live
+  here too, not in the code repo.
+- **Research** (`research/` + `projects/<slug>/research/`) — write-ups and references you cite explicitly:
+  general/cross-project research in the central catalog, single-project research under its project.
+- **Dashboards + graph** (Obsidian Bases for projects/standards/research tables, Dataview for the todo
+  aggregation) — a browsable picture of projects ↔ standards ↔ lessons ↔ research.
 - **Archive** (`archive/`) — finished projects, excluded from recall so the active base stays small.
 - **Semantic recall** (optional, `_meta/semantic/`) — concept-level search over the vault, so "how do we
   authenticate clients" finds a note titled "two-scheme API-key + JWT" even with zero shared keywords.
@@ -202,7 +205,12 @@ If you enabled semantic search, its Python package has its own suite: `uv run --
 | `/db <question>` | Query the project's database via a postgres MCP (if configured). |
 | `/onboard-project <path>` | Analyze a repo and add it to the vault (auto-builds/reads its Graphify graph when enabled). |
 | `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
+| `/feature` | Capture "as-built" knowledge for a shipped feature as a project feature note. |
+| `/backfill-features <slug>` | Seed feature notes for an existing project by distilling its wiki + specs + graph. |
 | `/archive-project <slug>` | Move a finished project to `archive/`, excluded from recall + dashboards. |
+| `/vault-tidy` | Tidy the vault — detect, show the plan/diff, apply only on confirmation. |
+| `/brain-health` | Read-only health check of the memory system. |
+| `/backup-config` | Refresh a recovery snapshot of global Claude Code config into the vault. |
 
 ## Optional: Semantic search (concept-level `/recall`)
 
