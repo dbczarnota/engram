@@ -172,7 +172,9 @@ A few things a script genuinely can't do are listed as **guided reminders** in t
 
 - Install the **superpowers** plugin (the brainstorm → spec → plan workflow Engram is built around).
 - Disable any claude-mem-style **plugin** (a script can't toggle plugins).
-- Open the folder in **Obsidian** and enable the **Dataview** community plugin.
+- Open the folder in **Obsidian** and enable the **Dataview** community plugin (required for the todo
+  dashboards). Optionally also install **File Hider** (`OA-file-hider`) to drop the infra folders from the
+  file-explorer pane — see *Clean knowledge view in Obsidian* below.
 - **Restart Claude Code**, then run `/recall test` to confirm the commands loaded.
 
 ## Testing it
