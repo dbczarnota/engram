@@ -1,13 +1,15 @@
 #requires -Version 7
-# UserPromptSubmit hook: nudge the agent to use the repo's graphify code graph for structural/impact
-# questions (it is otherwise never consulted). Best-effort: any failure exits 0 with no output.
+# PreToolUse hook (matcher: Grep|Glob): when the repo has a code graph, remind the agent at the
+# moment it reaches for raw search — the upstream `graphify claude install` pattern, in PowerShell
+# (the upstream payload is sh-only and no-ops on Windows). Replaces the old UserPromptSubmit regex
+# gate, which fired ~never (2 times in 30 days) and converted 0 times.
+# Best-effort: any failure exits 0 with no output.
 $ErrorActionPreference = "Stop"
 try {
   if ($env:BRAIN_CAPTURE_ACTIVE) { exit 0 }
   $raw = [Console]::In.ReadToEnd()
   if (-not $raw) { exit 0 }
   $hook = $raw | ConvertFrom-Json
-  $prompt = "" + $hook.prompt
   $cwd = "" + $hook.cwd
   $sid = "" + $hook.session_id
   $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
@@ -21,20 +23,18 @@ try {
     } catch {}
   }
 
-  # Structural-intent gate (EN + PL).
-  $rx = 'depends on|what calls|where .* used|blast.?radius|call graph|imports|architecture|coupl|co zależy|gdzie .* używan|co wywołuje|zależnoś|architektur|powiązan'
-  if ($prompt -notmatch "(?i)$rx") { exit 0 }
-
   # Graph must exist and the CLI must be available.
   $gout = Join-Path $cwd "graphify-out"
-  if (-not (Test-Path $gout)) { exit 0 }
+  if (-not (Test-Path (Join-Path $gout "graph.json"))) { exit 0 }
   if (-not (Get-Command graphify -ErrorAction SilentlyContinue)) { exit 0 }
 
-  # Once-per-session dedup via the memory-loop scratch.
+  # Cooldown: at most one hint per 5 minutes per session — repeats across a long session
+  # (unlike the old once-per-session flag) without spamming every search in a burst.
   if (-not $sid) { exit 0 }
   . "$PSScriptRoot\capture.lib.ps1"
   $s = Get-SessionScratch -Brain $brain -SessionId $sid
-  if ($s.gfxHinted) { exit 0 }
+  $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  if ($s.gfxHintedAt -and (($now - [long]$s.gfxHintedAt) -lt 300)) { exit 0 }
 
   # Light freshness check: GRAPH_REPORT's commit vs HEAD.
   $stale = ""
@@ -49,9 +49,9 @@ try {
     }
   } catch {}
 
-  Set-ScratchFlag -Brain $brain -SessionId $sid -Name "gfxHinted" -Value $true
-  $msg = "🕸 Code graph available for this repo — for structure/impact questions prefer ``graphify query ""<your question>""`` (or ``path A B`` / ``explain Node``) instead of grep alone.$stale"
-  $out = @{ hookSpecificOutput = @{ hookEventName = "UserPromptSubmit"; additionalContext = $msg } }
+  Set-ScratchFlag -Brain $brain -SessionId $sid -Name "gfxHintedAt" -Value $now
+  $msg = "🕸 Code graph available for this repo — for structure/impact questions prefer ``graphify query ""<question>""`` (or ``path A B`` / ``explain Node`` / ``affected Node``) over raw search; it returns a scoped subgraph.$stale"
+  $out = @{ hookSpecificOutput = @{ hookEventName = "PreToolUse"; additionalContext = $msg } }
   [Console]::OutputEncoding = [Text.Encoding]::UTF8
   $out | ConvertTo-Json -Depth 6 -Compress
   exit 0
