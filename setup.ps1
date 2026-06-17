@@ -53,14 +53,14 @@ Write-Host "brain-starter installer  (vault: $BrainPath)"
 if ($DryRun) { Write-Host "DRY RUN - no files will be changed." }
 
 # [1/8] Confirm vault path
-Step "[1/8] Vault path"
+Step "[1/9] Vault path"
 Write-Host "  Using vault at: $BrainPath"
 if (-not $DryRun -and -not (Confirm-Step "Is this correct?")) {
   Write-Error "Re-run with -BrainPath ""C:\path\to\brain"""; exit 1
 }
 
-# [2/8] Substitute <BRAIN_PATH>
-Step "[2/8] Substitute <BRAIN_PATH> placeholder"
+# [2/9] Substitute <BRAIN_PATH>
+Step "[2/9] Substitute <BRAIN_PATH> placeholder"
 try {
   $hits = Get-ChildItem $BrainPath -Recurse -File -Include *.md, *.ps1, *.json |
     Where-Object { $_.Name -ne 'setup.ps1' -and $_.FullName -notmatch '\\\.venv\\' -and $_.FullName -notmatch '\\\.index\\' } |
@@ -79,7 +79,7 @@ try {
 } catch { Write-Warning "  step failed: $_" }
 
 # [3/8] Junction ~/.claude/commands
-Step "[3/8] Install slash-commands (junction ~/.claude/commands)"
+Step "[3/9] Install slash-commands (junction ~/.claude/commands)"
 try {
   $link = Join-Path $ConfigRoot 'commands'
   $target = "$BrainPath\commands"
@@ -105,8 +105,42 @@ try {
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [4/8] SessionEnd capture hook + UserPromptSubmit auto-recall hook
-Step "[4/8] Register hooks in settings.json (capture + auto-recall)"
+# [4/9] Install bundled skills (~/.claude/skills) — copy, not junction
+Step "[4/9] Install bundled skills (copy into ~/.claude/skills)"
+# Copy (seed), not junction: the optional Graphify step below runs `graphify install`, which writes
+# into ~/.claude/skills — a junction would push those writes back into this repo. Copying keeps the
+# repo clean and lets a later `graphify install` freely refresh its own skill.
+try {
+  $skillsSrc = Join-Path $BrainPath 'skills'
+  if (-not (Test-Path $skillsSrc)) { Write-Host "  no bundled skills to install [ok]" }
+  else {
+    $skillsDst = Join-Path $ConfigRoot 'skills'
+    foreach ($sk in Get-ChildItem $skillsSrc -Directory) {
+      $dst = Join-Path $skillsDst $sk.Name
+      if (Test-Path $dst) {
+        Write-Host "  '$($sk.Name)' already installed at $dst"
+        if (Confirm-Step "Overwrite '$($sk.Name)' (a backup is kept)?") {
+          $bak = "$dst.bak.$(Get-Date -Format yyyyMMdd-HHmmss)"
+          Move-Item -LiteralPath $dst $bak; $script:backups += $bak
+          Copy-Item -LiteralPath $sk.FullName -Destination $dst -Recurse
+          Write-Host "  backup: $bak; copied [ok]"
+        } else { Write-Host "  skipped '$($sk.Name)'" }
+      } else {
+        Write-Host "  Will install skill '$($sk.Name)' -> $dst"
+        if (Confirm-Step "Install '$($sk.Name)'?") {
+          New-Item -ItemType Directory -Force $skillsDst | Out-Null
+          Copy-Item -LiteralPath $sk.FullName -Destination $dst -Recurse
+          Write-Host "  copied [ok]"
+        } else { Write-Host "  skipped '$($sk.Name)'" }
+      }
+    }
+    $script:manual += "youtube-transcribe skill: put STREAM2LLM_API_KEY=str_... in ~/.claude/stream2llm.env (see the skill's stream2llm.env.example)."
+    $script:manual += "graphify skill ships as a static Windows-flavoured SKILL.md; the optional Graphify add-on below installs the live CLI + a platform-correct skill."
+  }
+} catch { Write-Warning "  step failed: $_" }
+
+# [5/9] SessionEnd capture hook + UserPromptSubmit auto-recall hook
+Step "[5/9] Register hooks in settings.json (capture + auto-recall)"
 try {
   $settingsPath = Join-Path $ConfigRoot 'settings.json'
   $hookCmd = "pwsh -NoProfile -File ""$BrainPath\hooks\capture.ps1"""
@@ -132,8 +166,8 @@ try {
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [5/8] autoMemoryEnabled:false
-Step "[5/8] Disable competing auto-memory in settings.json"
+# [6/9] autoMemoryEnabled:false
+Step "[6/9] Disable competing auto-memory in settings.json"
 try {
   $settingsPath = Join-Path $ConfigRoot 'settings.json'
   $settings = Read-Settings $settingsPath
@@ -148,8 +182,8 @@ try {
   $script:manual += "Disable any claude-mem-style PLUGIN manually (a script can't toggle plugins)."
 } catch { Write-Warning "  step failed: $_" }
 
-# [6/8] CLAUDE.md vault pointer
-Step "[6/8] Add vault pointer to ~/.claude/CLAUDE.md"
+# [7/9] CLAUDE.md vault pointer
+Step "[7/9] Add vault pointer to ~/.claude/CLAUDE.md"
 try {
   $claudeMd = Join-Path $ConfigRoot 'CLAUDE.md'
   $pointerTemplate = @'
@@ -176,8 +210,8 @@ A knowledge vault lives at `{0}` (git repo + Obsidian vault); single source of t
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [7/8] Optional AI add-ons: Graphify (no key) + semantic search (needs a Gemini key)
-Step "[7/8] Optional AI add-ons (Graphify + semantic search)"
+# [8/9] Optional AI add-ons: Graphify (no key) + semantic search (needs a Gemini key)
+Step "[8/9] Optional AI add-ons (Graphify + semantic search)"
 $hasUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
 if ($DryRun) { Write-Host "  (dry-run: skipping optional add-ons)" }
 elseif (-not $hasUv) { Write-Host "  skipped (uv not found)" }
@@ -211,8 +245,8 @@ else {
   } else { Write-Host "  semantic skipped (_meta/semantic missing)" }
 }
 
-# [8/8] Guided manual steps
-Step "[8/8] Manual steps (these can't be automated)"
+# [9/9] Guided manual steps
+Step "[9/9] Manual steps (these can't be automated)"
 $script:manual += "Install the 'superpowers' plugin (Engram is built around its brainstorm->spec->plan workflow): in Claude Code run  /plugin marketplace add anthropics/claude-plugins-official  then  /plugin install superpowers@claude-plugins-official"
 $script:manual += "Open this folder in Obsidian and enable the Dataview community plugin."
 $script:manual += "Restart Claude Code, then run '/recall test' to confirm the commands load."

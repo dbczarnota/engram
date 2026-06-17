@@ -24,6 +24,10 @@ _meta/state/capture-usage.jsonl
 # Graphify code-structure graph (regenerable from code; knowledge lives in brain)
 graphify-out/
 
+# Skill caches (regenerable test/byte-compile artifacts)
+skills/**/__pycache__/
+skills/**/.pytest_cache/
+
 # semantic search (optional) — secrets, regenerable index + uv env
 _meta/semantic/.env
 _meta/semantic/.index/
