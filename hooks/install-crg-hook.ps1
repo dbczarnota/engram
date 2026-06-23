@@ -20,24 +20,62 @@ mkdir -p "$HOME/.cache" 2>/dev/null
 # CRG: fast lookup graph (.code-review-graph/graph.db) — incremental AST. Semantic embeddings are NOT
 # refreshed here (too heavy per-commit); run `code-review-graph embed` periodically for new nodes.
 command -v code-review-graph >/dev/null 2>&1 && code-review-graph update >> "$HOME/.cache/crg-rebuild.log" 2>&1 || true
-# CRG self-heal: on Windows the `update` path feeds backslash file paths to CRG's POSIX
-# `node_modules/**` ignore matcher (_should_ignore), so it re-adds every dependency file each commit
-# (a full `build` normalizes separators and stays clean — `update` does not). Prune dependency
-# nodes/edges + orphaned rows and rebuild FTS so the graph stays app-only. Best-effort, never blocks.
+# CRG self-heal (best-effort, never blocks). Two Windows-specific fixes the upstream `update` path needs:
+#   1) Dependency prune: `update` feeds backslash paths to CRG's POSIX `node_modules/**` ignore matcher
+#      (_should_ignore), so it re-adds every dependency / worktree file each commit. Strip them.
+#   2) Drive-letter canon: the same file reached as `c:\…` and `C:\…` yields TWO nodes (qualified_name is
+#      case-sensitive), doubling the graph and every query. Canonicalize the drive letter to upper-case.
 command -v python >/dev/null 2>&1 && python - >> "$HOME/.cache/crg-rebuild.log" 2>&1 <<'PY' || true
 import os, sqlite3, sys
 db = os.path.join(".code-review-graph", "graph.db")
 if not os.path.exists(db):
     sys.exit(0)
-PATS = ("%node_modules%", "%site-packages%", "%.claude%")  # deps + git-worktree source copies under .claude/
+PATS = ("%node_modules%", "%site-packages%", "%.claude%", "%.obsidian%")  # deps, git-worktree copies, vendored editor plugins
 where = " OR ".join("file_path LIKE ?" for _ in PATS)
+
+def canon(s):  # "c:\..." -> "C:\..." (upper-case drive letter only)
+    return s[0].upper() + s[1:] if len(s) >= 2 and s[1] == ":" and "a" <= s[0] <= "z" else s
+
 con = sqlite3.connect(db)
+changed = False
 try:
-    n = con.execute(f"SELECT COUNT(*) FROM nodes WHERE {where}", PATS).fetchone()[0]
-    if n:
+    pruned = con.execute(f"SELECT COUNT(*) FROM nodes WHERE {where}", PATS).fetchone()[0]
+    if pruned:
         con.execute(f"DELETE FROM edges WHERE {where}", PATS)
         con.execute(f"DELETE FROM nodes WHERE {where}", PATS)
+        changed = True
+
+    # drive-letter canon: promote lower-case-drive nodes, deleting any that collide with an upper twin
+    nodes = con.execute("SELECT qualified_name, file_path FROM nodes").fetchall()
+    have = {qn for qn, _ in nodes}
+    deduped = 0
+    for qn, fp in nodes:
+        cq = canon(qn)
+        if cq == qn:
+            continue
+        changed = True
+        if cq in have:
+            con.execute("DELETE FROM nodes WHERE qualified_name=?", (qn,))
+            deduped += 1
+        else:
+            con.execute("UPDATE nodes SET qualified_name=?, file_path=? WHERE qualified_name=?", (cq, canon(fp), qn))
+            have.add(cq)
+    for col in ("source_qualified", "target_qualified", "file_path"):
+        for (v,) in con.execute(f"SELECT DISTINCT {col} FROM edges").fetchall():
+            if canon(v) != v:
+                con.execute(f"UPDATE edges SET {col}=? WHERE {col}=?", (canon(v), v)); changed = True
+    for (qn,) in con.execute("SELECT qualified_name FROM embeddings").fetchall():
+        cq = canon(qn)
+        if cq == qn:
+            continue
+        if con.execute("SELECT 1 FROM embeddings WHERE qualified_name=?", (cq,)).fetchone():
+            con.execute("DELETE FROM embeddings WHERE qualified_name=?", (qn,))
+        else:
+            con.execute("UPDATE embeddings SET qualified_name=? WHERE qualified_name=?", (cq, qn))
+
+    if changed:
         for stmt in (
+            "DELETE FROM edges WHERE id NOT IN (SELECT MIN(id) FROM edges GROUP BY kind,source_qualified,target_qualified,file_path,line)",
             "DELETE FROM embeddings WHERE qualified_name NOT IN (SELECT qualified_name FROM nodes)",
             "DELETE FROM risk_index WHERE node_id NOT IN (SELECT id FROM nodes)",
             "DELETE FROM flow_memberships WHERE node_id NOT IN (SELECT id FROM nodes)",
@@ -48,7 +86,7 @@ try:
             except sqlite3.OperationalError:
                 pass
         con.commit()
-        print(f"[crg-prune] removed {n} dependency nodes from {db}")
+        print(f"[crg-prune] {db}: removed {pruned} dependency nodes, deduped {deduped} case-duplicate nodes")
 finally:
     con.close()
 PY
