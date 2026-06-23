@@ -3,7 +3,7 @@
     "_meta/",
     "hooks/",
     "commands/",
-    "graphify-out/",
+    ".code-review-graph/",
     "CLAUDE.md",
     "HOW-IT-WORKS.md",
     "README.md",

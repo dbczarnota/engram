@@ -163,7 +163,7 @@ exact change, asks before touching anything (`[Y/n/skip]`), and backs up any fil
 5. Set `autoMemoryEnabled: false` in `~/.claude/settings.json`.
 6. Add a vault pointer to your global `~/.claude/CLAUDE.md` (a sentinel-bounded block, replaced in place on
    re-runs — never duplicated).
-7. Optionally set up the AI add-ons (semantic search + Graphify) behind a single Gemini-key prompt.
+7. Optionally set up the AI add-ons (semantic search + the CRG code graph) behind a single Gemini-key prompt.
 
 It is **idempotent**: re-run it any time — already-done steps report `[ok]` and change nothing. Use
 **`-DryRun`** to preview the entire run without writing a single file.
@@ -205,7 +205,7 @@ If you enabled semantic search, its Python package has its own suite: `uv run --
 | `/vault-audit` | Lint: orphans, dead links, index drift, frontmatter gaps. |
 | `/logs <focus>` | Investigate Logfire for the current project (if you use the Logfire MCP). |
 | `/db <question>` | Query the project's database via a postgres MCP (if configured). |
-| `/onboard-project <path>` | Analyze a repo and add it to the vault (auto-builds/reads its Graphify graph when enabled). |
+| `/onboard-project <path>` | Analyze a repo and add it to the vault (auto-builds its CRG code graph when installed). |
 | `/extract-standards <path>` | Scan a project's specs/plans, propose cross-project standards for approval. |
 | `/feature` | Capture "as-built" knowledge for a shipped feature as a project feature note. |
 | `/backfill-features <slug>` | Seed feature notes for an existing project by distilling its wiki + specs + graph. |
@@ -235,9 +235,9 @@ Re-embedding is cached by content hash, so re-runs only embed changed chunks. To
 another `Embedder` in `embedder.py` and select it via `BRAIN_EMBED_PROVIDER`; a provider/dimension change is
 detected and refuses a stale index until you reindex.
 
-> **Semantic search vs Graphify:** complementary, not the same engine. This indexes the vault's **knowledge
-> across projects**; Graphify maps **code structure inside** one repo with its own embedding pass. They
-> share only the `GEMINI_API_KEY` environment variable.
+> **Semantic search vs CRG:** complementary, not the same engine. This indexes the vault's **knowledge
+> across projects** (Gemini-embedded markdown); CRG maps **code structure inside** one repo (tree-sitter AST
+> + a local code embedder). Different inputs, different stores.
 
 ### Auto-recall (proactive `/recall`)
 
@@ -248,42 +248,42 @@ deliberately thrifty and quiet:
 - **FTS-first** — a local keyword pass answers most prompts in ~0.3s and **never imports the embedder**;
   semantic search escalates only when keywords miss nothing strong.
 - **Scoped** to `standards` / `lessons` / `decisions` (the "apply-this" knowledge) — never journals/todos or
-  code; it is **disjoint from Graphify** by design.
+  code; it is **disjoint from CRG** by design.
 - **Silent when unsure** (a confidence threshold) and **de-duped per session** (a note is never injected
   twice), so it doesn't drift into the always-on token cost this project rejects.
 
 Toggle and tune it in `_meta/engram.json` (`autoRecall.enabled` / `topN` / `minScore` / `tokenBudget` /
 `scope`); the same file's `semantic.enabled` flag also gates the semantic layer (auto-recall escalation and
-the `/recall` semantic tier). Trivial prompts ("ok", "run it") do nothing. *(Graphify stays a separate
-per-repo tool; the `graphify.enabled` flag here only controls whether `/onboard-project` auto-builds a graph
-for a newly onboarded repo — `setup.ps1` flips it on when you install Graphify.)*
+the `/recall` semantic tier). Trivial prompts ("ok", "run it") do nothing. *(CRG stays a separate per-repo
+tool reached over MCP; `/onboard-project` builds it for a newly onboarded repo when `code-review-graph` is
+installed.)*
 
-## Optional: Graphify (codebase knowledge graph)
+## Optional: CRG (codebase knowledge graph over MCP)
 
-[Graphify](https://github.com/safishamsi/graphify) turns a repo into a queryable knowledge graph from your
-code (tree-sitter AST, parsed locally — **0 tokens, no API key**). It pairs well with this vault: Graphify
-maps **code structure inside** a project, the vault holds **knowledge across** projects. A code-only
-`.graphifyignore` (shipped here) keeps it to source files — so a full build and the commit-hook rebuild stay
-identical, and no Gemini key is ever needed.
+[code-review-graph](https://github.com/tirth8205/code-review-graph) (CRG) turns a repo into a queryable code
+graph (tree-sitter AST, parsed locally — **0 tokens, no API key**) and serves it to the agent over **MCP**.
+It pairs well with this vault: CRG maps **code structure inside** a project, the vault holds **knowledge
+across** projects. It indexes `git ls-files`, so `node_modules`/build dirs are excluded automatically.
 
-`/onboard-project` does it for you: when `graphify.enabled` is set it copies the `.graphifyignore`, builds the
-graph with `graphify update .`, and installs an auto-rebuild post-commit hook — you never initialize Graphify
-by hand and it stays fresh on every commit. The manual sequence below is only for a repo you're not onboarding:
+`/onboard-project` does it for you: when `code-review-graph` is installed it builds the graph, computes local
+embeddings, and installs an auto-rebuild post-commit hook — you never initialize CRG by hand and it stays
+fresh on every commit. The manual sequence below is only for a repo you're not onboarding:
 
 ```powershell
-uv tool install graphifyy --with openai          # one-time: install the tool
-graphify install --platform windows              # one-time: register the /graphify skill
+uv tool install code-review-graph                # one-time: install the tool + register the MCP server
 cd C:\path\to\your\repo
-Copy-Item <BRAIN_PATH>\.graphifyignore .          # code-only (exclude docs/images)
-graphify update .                                 # build/refresh graph.json + GRAPH_REPORT.md + graph.html (no key)
-pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-graphify-hook.ps1'; Install-GraphifyHook -RepoPath ."
+code-review-graph build                          # AST → .code-review-graph/graph.db (git ls-files; no key)
+code-review-graph embed                          # local embeddings → semantic code search (no key)
+pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-crg-hook.ps1'; Install-CrgHook -RepoPath ."
 ```
 
-> The upstream `graphify hook install` is broken on uv-tool/Windows installs (it silently no-ops), so use
-> `install-graphify-hook.ps1` above. The full `graphify .` still works but needs a Gemini key and adds nothing
-> once docs are excluded.
+> The post-commit hook runs `code-review-graph update` then a **self-heal prune** — on Windows the
+> incremental `update` re-adds dependency/worktree files (it feeds backslash paths to a POSIX ignore
+> matcher), so the prune keeps the graph app-only every commit.
 
-See `HOW-IT-WORKS.md` for the full mental model of how the vault and Graphify divide responsibilities.
+The agent queries CRG over its MCP tools (`query_graph`, `semantic_search_nodes`, `get_impact_radius`,
+`shortest_path`). See `HOW-IT-WORKS.md` for the full mental model of how the vault and CRG divide
+responsibilities.
 
 ## Capture hook
 
@@ -298,7 +298,7 @@ See `HOW-IT-WORKS.md` for the full mental model of how the vault and Graphify di
 ```
 LICENSE              MIT
 README.md            this file
-HOW-IT-WORKS.md      the mental model (brain vs Graphify; how recall works)
+HOW-IT-WORKS.md      the mental model (brain vs CRG code graph; how recall works)
 CLAUDE.md            router for the agent when working inside the vault
 Home.md              human landing page (open in Obsidian)
 setup.ps1            the interactive install wizard
@@ -315,7 +315,7 @@ standards/  lessons/  research/  projects/  archive/  dashboards/
 ## Clean knowledge view in Obsidian
 
 Open the vault in Obsidian and you'd otherwise see the *infrastructure* too — `hooks/`, `commands/`,
-`_meta/`, `graphify-out/`, the `setup.*` scripts. The shipped `.obsidian/app.json` already adds those to
+`_meta/`, `.code-review-graph/`, the `setup.*` scripts. The shipped `.obsidian/app.json` already adds those to
 Obsidian's **Excluded files** (`userIgnoreFilters`), so they drop out of search, the graph, and the quick
 switcher — your recall surfaces stay knowledge-only with zero plugins.
 

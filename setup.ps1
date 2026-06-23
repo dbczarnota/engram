@@ -107,9 +107,8 @@ try {
 
 # [4/9] Install bundled skills (~/.claude/skills) — copy, not junction
 Step "[4/9] Install bundled skills (copy into ~/.claude/skills)"
-# Copy (seed), not junction: the optional Graphify step below runs `graphify install`, which writes
-# into ~/.claude/skills — a junction would push those writes back into this repo. Copying keeps the
-# repo clean and lets a later `graphify install` freely refresh its own skill.
+# Copy (seed), not junction: skills are installed into ~/.claude/skills as standalone copies so a tool
+# that refreshes its own skill there never pushes writes back into this repo.
 try {
   $skillsSrc = Join-Path $BrainPath 'skills'
   if (-not (Test-Path $skillsSrc)) { Write-Host "  no bundled skills to install [ok]" }
@@ -135,7 +134,6 @@ try {
       }
     }
     $script:manual += "youtube-transcribe skill: put STREAM2LLM_API_KEY=str_... in ~/.claude/stream2llm.env (see the skill's stream2llm.env.example)."
-    $script:manual += "graphify skill ships as a static Windows-flavoured SKILL.md; the optional Graphify add-on below installs the live CLI + a platform-correct skill."
   }
 } catch { Write-Warning "  step failed: $_" }
 
@@ -210,26 +208,19 @@ A knowledge vault lives at `{0}` (git repo + Obsidian vault); single source of t
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [8/9] Optional AI add-ons: Graphify (no key) + semantic search (needs a Gemini key)
-Step "[8/9] Optional AI add-ons (Graphify + semantic search)"
+# [8/9] Optional AI add-ons: CRG code graph (no key) + semantic search (needs a Gemini key)
+Step "[8/9] Optional AI add-ons (CRG code graph + semantic search)"
 $hasUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
 if ($DryRun) { Write-Host "  (dry-run: skipping optional add-ons)" }
 elseif (-not $hasUv) { Write-Host "  skipped (uv not found)" }
 else {
   $sem = "$BrainPath\_meta\semantic"
-  # 7a Graphify — code-only knowledge graph. No API key needed: onboard + the commit hook use
-  # `graphify update .` (AST-only). A `.graphifyignore` keeps it code-only so build == hook.
-  if (Confirm-Step "Install Graphify (code knowledge graph, no API key needed)?") {
-    & uv tool install graphifyy --with openai
-    & graphify install --platform windows
-    # Record the opt-in so /onboard-project auto-builds graphs for new repos (no manual init).
-    $cfgPath = "$BrainPath\_meta\engram.json"
-    if (Test-Path $cfgPath) {
-      ((Get-Content $cfgPath -Raw) -replace '("graphify":\s*\{\s*"enabled":\s*)false', '${1}true') |
-        Set-Content -LiteralPath $cfgPath -Encoding UTF8
-    }
-    $script:manual += "Graphify: graphs build automatically (code-only, no API key) when you run /onboard-project on a repo."
-    Write-Host "  Graphify installed [ok]"
+  # 7a CRG (code-review-graph) — per-repo code graph served over MCP. No API key needed: build +
+  # the commit hook use tree-sitter AST + a local embedder. The MCP server registers user-scope.
+  if (Confirm-Step "Install CRG (code-review-graph, code knowledge graph over MCP, no API key needed)?") {
+    & uv tool install code-review-graph
+    $script:manual += "CRG: run /onboard-project on a repo to build its code graph + install the auto-rebuild hook (code-only, no API key)."
+    Write-Host "  CRG installed [ok]"
   }
   # 7b Semantic search — needs a Gemini API key (it embeds the markdown vault).
   if (Test-Path "$sem\pyproject.toml") {

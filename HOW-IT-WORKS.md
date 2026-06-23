@@ -23,64 +23,57 @@ understanding everything else.
    `/recall` simply falls back to grep.
 3. **Read tier** — only the matched pages are read in full.
 
-The semantic index is **gitignored and regenerable** (like Graphify output) — it's never the source of
+The semantic index is **gitignored and regenerable** (like the CRG code graph) — it's never the source of
 truth; the markdown is. Rebuild any time with `python -m reindex`.
 
 **Auto-recall (optional, on by default)** makes recall *proactive*: a `UserPromptSubmit` hook injects a tiny
 "possibly relevant notes" hint on substantive prompts — FTS-first (most turns never import the embedder),
 scoped to standards/lessons/decisions, silent when unsure, de-duped per session. Toggle/knobs live in
-`_meta/engram.json`. It draws from the vault only — never code — so it stays complementary to Graphify.
+`_meta/engram.json`. It draws from the vault only — never code — so it stays complementary to CRG.
 
-## 2. Graphify — code structure INSIDE one project
+## 2. CRG (code-review-graph) — code structure INSIDE one project
 
-- **What:** a map of one repo's code — classes, functions, imports, call graph — as a queryable graph.
-- **Where:** `graphify-out/` **inside each project repo** (e.g. `myproject/graphify-out/`). **NOT in brain.**
-- **Form:** `graph.json` (the graph), `GRAPH_REPORT.md` (human/AI-readable summary), `graph.html` (click-around viewer).
-- **Regenerable:** it's derived from your code. Lose it and you rebuild it with one command — no knowledge lost.
+- **What:** a map of one repo's code — classes, functions, imports, call graph — as a queryable graph,
+  served to the agent over **MCP** (the agent calls it directly, like any tool).
+- **Where:** `.code-review-graph/graph.db` (SQLite) **inside each project repo**. **NOT in brain.** Gitignored.
+- **Form:** a per-repo graph DB + a global `code-review-graph` MCP server exposing query tools.
+- **Regenerable:** derived from your code. Lose it and rebuild with `code-review-graph build` — no knowledge lost.
 
-The brain only **points** to a project's graph (the project page says "graph lives here"). The graph itself
-rides along in the project repo.
+The brain only **points** to a project's graph; the DB rides along in the project repo.
 
-## How Graphify is built and kept fresh
+## How CRG is built and kept fresh
 
-- **Tooling:** installed once (`uv tool install graphifyy --with openai`), then `graphify install` registers
-  a `/graphify` skill so the agent knows to use it.
-- **Cost model:** parsing **code** uses tree-sitter locally = **0 tokens, free**. Only **docs/markdown** go
-  through an LLM for a semantic pass (small, ~cents per project, needs an LLM API key in the environment).
-- **First build:** `graphify .` (AST + semantic) then `graphify cluster-only .` (writes the report + HTML).
-- **Auto-refresh on commit:** `graphify hook install` adds a git **post-commit** hook. Every commit
-  re-parses the **changed files** (code only, free, in the background) and updates `graph.json`. A
-  **post-checkout** hook refreshes on branch switches.
-- **So:** new functions enter the graph **when you commit them** — then the agent sees them on the next
-  `/graphify` query. Uncommitted code isn't in the graph yet; run `graphify update .` (free) to refresh
-  by hand. The semantic/doc layer only updates on a full `graphify .`.
+- **Tooling:** installed once (`uv tool install code-review-graph`); the MCP server is registered user-scope
+  and auto-detects the repo you're in.
+- **Cost model:** parsing **code** uses tree-sitter locally = **0 tokens, free**. Semantic search uses a
+  **local** embedding model (`all-MiniLM-L6-v2`, no API key).
+- **First build:** `code-review-graph build` (AST → `graph.db`, uses `git ls-files` so node_modules is
+  excluded) then `code-review-graph embed` (local embeddings → semantic search).
+- **Auto-refresh on commit:** the post-commit hook (`hooks/install-crg-hook.ps1`) runs
+  `code-review-graph update` (re-parses changed files) then a **self-heal prune** that strips any
+  dependency / worktree nodes the Windows `update` path re-adds — so the graph stays app-only every commit.
+- **So:** new functions enter the graph **when you commit them**. Embeddings aren't refreshed per-commit
+  (too heavy); run `code-review-graph embed` periodically to index new nodes for semantic search.
 
 ## How the agent uses it day to day
 
-- `/graphify` (skill) + a directive in your global `CLAUDE.md` tell the agent: **consult the graph before
-  grepping**. Querying `graph.json` (~280 tokens) or reading `GRAPH_REPORT.md` beats reading 40 files.
-- `/onboard-project` reads a project's `GRAPH_REPORT.md` instead of scanning the whole codebase; with
-  `graphify.enabled` set it also **builds** the graph (+ auto-rebuild hooks) for a repo that has none yet.
-- Net effect: cheaper, faster navigation of large codebases; the agent answers "where is X / what calls Y /
-  what's the architecture" from the graph.
+- A directive in your global `CLAUDE.md` tells the agent to **consult CRG-MCP for structure & impact**:
+  `query_graph` (callers/callees), `semantic_search_nodes` (find the code that does Y),
+  `get_impact_radius` (blast-radius before an edit), `shortest_path` (A→B).
+- **When it wins:** multi-hop / cross-file / architectural questions where flat grep+Read fails or
+  hallucinates. The win is **precision and fewer tool-calls, not token savings** — for exact strings/config/
+  logs, grep still wins.
+- `/onboard-project` builds CRG (+ the auto-rebuild hook) for a repo that has none yet.
 
 ## The end-to-end loop
 
-1. **Work in a project repo.** Commit as usual → the graph auto-updates (free, background).
-2. **Ask the agent about the code** → it consults the project's Graphify graph.
+1. **Work in a project repo.** Commit as usual → CRG auto-updates + self-prunes (free, background).
+2. **Ask the agent about the code** → it consults the project's CRG graph over MCP.
 3. **Ask about cross-project things** ("how did we do auth", "like in the twins") → it consults the **brain
    vault** (standards / lessons / other project pages) via `/recall` or the CLAUDE.md pointer.
 4. **At session end** → the capture hook writes a journal entry to the brain project page (if mapped).
 5. **When you learn something reusable** → `/remember-standard` or `/remember-lesson` (explicit) puts it in
    brain so every future project benefits.
 
-## Should you commit `graphify-out/` to git?
-
-It lives in the **project** repo, and it's **regenerable from code**, so this is a per-project choice:
-
-- **Gitignore it (recommended default):** keeps project repos clean; no churn from `graph.json` changing on
-  every commit; rebuild anytime with `graphify .`. Your *knowledge* is safe in brain regardless.
-- **Commit it:** versions the graph and gives instant recovery without a rebuild; Graphify ships a git
-  merge-driver for `graph.json` so parallel commits don't conflict. Costs repo size + noisier diffs.
-
-Either way, **brain (your knowledge) is the thing that must be backed up — and it already is, on GitHub.**
+**brain (your knowledge) is the thing that must be backed up — and it already is, on GitHub.** The per-repo
+`.code-review-graph/` DB is gitignored and rebuilt from code anytime.

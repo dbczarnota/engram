@@ -8,15 +8,15 @@ Target: $ARGUMENTS (default: current working directory).
 1. Resolve the repo root and pick a kebab-case slug.
 2. Analyze the repo: README, package manifests (pyproject/package.json), top-level structure, its own
    CLAUDE.md if any, recent `git log`.
-   **Graphify (auto, no API key):** if `graphify.enabled` is true in `_meta/engram.json` and `graphify` is on
-   PATH — read `graphify-out/GRAPH_REPORT.md` for structure when it exists; **otherwise build it now, no manual
-   step:** copy the vault's code-only `.graphifyignore` into the repo, then run `graphify update .` (AST-only →
-   writes graph.json + GRAPH_REPORT.md + graph.html; **no LLM, no API key**), then install the auto-rebuild
-   hook with
-   `pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-graphify-hook.ps1'; Install-GraphifyHook -RepoPath ."`
-   (use **this**, not `graphify hook install` — the upstream hook silently no-ops on uv-tool/Windows installs),
-   then read the report. Don't use the full `graphify .` (it needs a Gemini key and adds nothing once docs are
-   excluded). If Graphify is disabled or not installed, grep the repo directly.
+   **CRG (code-review-graph, auto, keyless):** if `code-review-graph` is on PATH, build the fast code-lookup
+   graph: `code-review-graph build` (AST → `.code-review-graph/graph.db`, uses `git ls-files` so node_modules
+   is excluded) then `code-review-graph embed` (local `all-MiniLM-L6-v2`, no API key — enables semantic code
+   search). Install the auto-rebuild + self-heal-prune hook with
+   `pwsh -NoProfile -Command ". '<BRAIN_PATH>\hooks\install-crg-hook.ps1'; Install-CrgHook -RepoPath ."` (the
+   hook prunes the per-commit `update` re-pollution on Windows). The CRG **MCP server is registered globally**
+   (user-scope, auto-detects the repo), so once the graph exists its tools (`query_graph`,
+   `semantic_search_nodes`, `get_impact_radius`, `shortest_path`) work in this repo. CRG gitignores
+   `.code-review-graph/` itself. If `code-review-graph` is not installed, grep the repo directly.
 3. Create `projects/<slug>/<slug>.md` from `_meta/templates/project.md`: what it is, stack, status,
    build/test/lint commands, and observability coordinates (logfire project / db — **names only, never
    secrets**).

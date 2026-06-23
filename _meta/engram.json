@@ -3,6 +3,5 @@
   "autoRecall": { "enabled": true, "topN": 3, "minScore": 0.30, "tokenBudget": 350,
                   "scope": ["standards", "lessons"], "includeProjectWiki": true, "tier2Min": 0.55 },
   "capture":    { "stopThreshold": 60, "minTurns": 6, "provider": "claude-cli", "model": "sonnet" },
-  "graphify":   { "enabled": true, "hint": { "enabled": true } },
   "journal":    { "language": "English" }
 }

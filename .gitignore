@@ -21,8 +21,6 @@ _meta/state/capture-usage.jsonl
 # local per-machine Claude Code settings
 .claude/settings.local.json
 
-# Graphify code-structure graph (regenerable from code; knowledge lives in brain)
-graphify-out/
 
 # Skill caches (regenerable test/byte-compile artifacts)
 skills/**/__pycache__/

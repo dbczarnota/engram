@@ -3,7 +3,6 @@ import time
 
 from health_check import (
     classify_recall_used,
-    graphify_hint_followed,
     is_frontmatter_junk,
     within_window,
 )
@@ -24,19 +23,6 @@ def test_classify_recall_used_detects_later_read():
     assert classify_recall_used(entries, -1, ["standards/agents.md"]) is True
     assert classify_recall_used(entries, -1, ["lessons/kinde.md"]) is False
     assert classify_recall_used(entries, -1, []) is False
-
-
-def test_graphify_hint_followed():
-    hint = {"type": "attachment", "attachment": {"type": "hook_additional_context",
-            "content": ["Code graph available for this repo — graphify query"]}}
-    followed = [hint, _tool("Bash", {"command": 'graphify query "what calls foo"'})]
-    assert graphify_hint_followed(followed) == (1, 1)
-
-    ignored = [hint, _tool("Bash", {"command": "grep -r foo ."})]
-    assert graphify_hint_followed(ignored) == (1, 0)
-
-    none = [_tool("Bash", {"command": "graphify query x"})]
-    assert graphify_hint_followed(none) == (0, 0)
 
 
 def test_within_window():

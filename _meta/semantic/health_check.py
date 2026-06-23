@@ -87,38 +87,6 @@ def classify_recall_used(entries: list, idx: int, paths: list[str]) -> bool:
     return False
 
 
-def graphify_hint_followed(entries: list) -> tuple[int, int]:
-    """(# graphify-hint injections, # followed later by a `graphify query/path/explain` call).
-    Measures whether sub-project C actually changed behavior."""
-    hinted = followed = 0
-    for i, o in enumerate(entries):
-        if o.get("type") != "attachment":
-            continue
-        att = o.get("attachment") or {}
-        if att.get("type") != "hook_additional_context":
-            continue
-        cont = att.get("content") or []
-        text = "\n".join(cont) if isinstance(cont, list) else str(cont)
-        if "Code graph available for this repo" not in text:
-            continue
-        hinted += 1
-        for o2 in entries[i + 1:]:
-            m = o2.get("message")
-            if not isinstance(m, dict):
-                continue
-            done = False
-            for bt, b in blocks(m.get("content")):
-                if bt == "tool_use" and isinstance(b, dict) and b.get("name") in ("Bash", "PowerShell"):
-                    cmd = str((b.get("input") or {}).get("command", ""))
-                    if re.search(r"\bgraphify\s+(query|path|explain)\b", cmd):
-                        followed += 1
-                        done = True
-                        break
-            if done:
-                break
-    return hinted, followed
-
-
 def load(f):
     out = []
     try:
@@ -157,10 +125,6 @@ def main(days: int = DEFAULT_DAYS):
     sessions_with_brain_read = set()
     skill_uses = collections.Counter()
     surfaced = collections.Counter()
-    # graphify
-    gfx_skill = gfx_cli = gfx_reads = 0
-    sessions_with_gfx = set()
-    gfx_hint_shown = gfx_hint_followed_n = 0
 
     for f in FILES:
         try:
@@ -173,10 +137,6 @@ def main(days: int = DEFAULT_DAYS):
         if count_prompts(entries) < MIN_PROMPTS:
             continue
         n_kept += 1
-
-        h_shown, h_followed = graphify_hint_followed(entries)
-        gfx_hint_shown += h_shown
-        gfx_hint_followed_n += h_followed
 
         recall_here = []  # (idx, surfaced_paths)
         for i, o in enumerate(entries):
@@ -215,9 +175,6 @@ def main(days: int = DEFAULT_DAYS):
                 if mcmd:
                     name = mcmd.group(1)
                     skill_uses[name] += 1
-                    if "graphify" in name:
-                        gfx_skill += 1
-                        sessions_with_gfx.add(f)
                 if txt.strip():
                     n_prompts += 1
 
@@ -232,24 +189,10 @@ def main(days: int = DEFAULT_DAYS):
                         if re.search(r"[\\/]brain[\\/]", fp):
                             brain_reads[fp] += 1
                             sessions_with_brain_read.add(f)
-                        if re.search(r"graphify-out|GRAPH_REPORT|graph\.(json|html)|OVERVIEW\.md", fp):
-                            gfx_reads += 1
-                            sessions_with_gfx.add(f)
                     elif name == "Skill":
                         sk = str(inp.get("skill", ""))
                         if sk:
                             skill_uses[sk] += 1
-                            if "graphify" in sk:
-                                gfx_skill += 1
-                                sessions_with_gfx.add(f)
-                    elif name in ("Bash", "PowerShell"):
-                        cmd = str(inp.get("command", ""))
-                        if re.search(r"\bgraphify\b", cmd):
-                            gfx_cli += 1
-                            sessions_with_gfx.add(f)
-                        if re.search(r"graphify-out|GRAPH_REPORT", cmd):
-                            gfx_reads += 1
-                            sessions_with_gfx.add(f)
 
         for idx, paths in recall_here:
             if not paths:
@@ -273,14 +216,6 @@ def main(days: int = DEFAULT_DAYS):
     print(f"snippets / frontmatter-junk      : {total_snip} / {junk_snip}  ({jp}% junk)")
     up = (100 * used // (used + ignored)) if (used + ignored) else 0
     print(f"used in-session / ignored        : {used} / {ignored}  ({up}% used)")
-    print()
-    print("--- GRAPHIFY ---")
-    print(f"sessions that touched graphify   : {len(sessions_with_gfx)}  ({100*len(sessions_with_gfx)//k}% of kept)")
-    print(f"  /graphify skill invocations    : {gfx_skill}")
-    print(f"  graphify CLI calls (bash/pwsh) : {gfx_cli}")
-    print(f"  reads of graphify-out/reports  : {gfx_reads}")
-    hf = (100 * gfx_hint_followed_n // gfx_hint_shown) if gfx_hint_shown else 0
-    print(f"  graphify-hint shown / followed : {gfx_hint_shown} / {gfx_hint_followed_n}  ({hf}% acted on)")
     print()
     print("--- MANUAL VAULT ACCESS ---")
     print(f"sessions that Read a brain/ file : {len(sessions_with_brain_read)}  ({100*len(sessions_with_brain_read)//k}%)")
