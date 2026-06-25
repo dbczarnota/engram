@@ -67,7 +67,8 @@ function Get-SessionScratch {
   }
   return [pscustomobject]@{
     turns = 0; files = @(); prompts = @();
-    committed = $false; journalEdited = $false; summarized = $false
+    committed = $false; journalEdited = $false; summarized = $false;
+    everSummarized = $false; lastReindexAt = ""
   }
 }
 
@@ -121,6 +122,54 @@ function Clear-SessionScratch {
   if (Test-Path $p) { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 }
 
+# --- Auto journal block: one marker-delimited entry per session, upserted in place. ---
+function _AutoMarkers {
+  param([string]$SessionId)
+  $safe = ($SessionId -replace '[^A-Za-z0-9_-]', '_')
+  return [pscustomobject]@{
+    Open  = "<!-- brain:auto session=$safe -->"
+    Close = "<!-- /brain:auto session=$safe -->"
+  }
+}
+
+function _AutoRegex {
+  param([string]$SessionId)
+  $m = _AutoMarkers $SessionId
+  $pattern = [regex]::Escape($m.Open) + '.*?' + [regex]::Escape($m.Close) + '(\r?\n)*'
+  return [regex]::new($pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+}
+
+function Set-AutoJournalBlock {
+  param([string]$JournalPath, [string]$SessionId, [string]$EntryText)
+  $m = _AutoMarkers $SessionId
+  $block = "$($m.Open)`n$EntryText`n$($m.Close)`n`n"
+  $existing = if (Test-Path $JournalPath) { Get-Content $JournalPath -Raw } else { "" }
+  if (-not $existing) { $existing = "" }
+  $rx = _AutoRegex $SessionId
+  if ($rx.IsMatch($existing)) {
+    $merged = $rx.Replace($existing, $block, 1)
+  } else {
+    $firstEntry = [regex]::Match($existing, '(?m)^## ')
+    if ($firstEntry.Success) {
+      $merged = $existing.Substring(0, $firstEntry.Index) + $block + $existing.Substring($firstEntry.Index)
+    } else {
+      $merged = $block + $existing
+    }
+  }
+  Set-Content -Path $JournalPath -Value $merged -Encoding utf8
+}
+
+function Remove-AutoJournalBlock {
+  param([string]$JournalPath, [string]$SessionId)
+  if (-not (Test-Path $JournalPath)) { return }
+  $existing = Get-Content $JournalPath -Raw
+  if (-not $existing) { return }
+  $rx = _AutoRegex $SessionId
+  if ($rx.IsMatch($existing)) {
+    Set-Content -Path $JournalPath -Value ($rx.Replace($existing, '', 1)) -Encoding utf8
+  }
+}
+
 # --- Slug resolution (longest matching path prefix in project-map.json). ---
 function Resolve-Slug {
   param([string]$Brain, [string]$Cwd)
@@ -152,7 +201,7 @@ function Test-ShouldSummarize {
 # --- One model-agnostic capture: condense -> python -m summarize -> {journal,lesson,feature}.
 # Writes the journal entry + stages lesson/feature drafts to _inbox. Best-effort. ---
 function Invoke-Capture {
-  param([string]$Brain, [string]$Slug, [string]$SessionId, [string]$TranscriptPath, [string]$Cwd, [switch]$Partial)
+  param([string]$Brain, [string]$Slug, [string]$SessionId, [string]$TranscriptPath, [string]$Cwd)
   try {
   if (-not $TranscriptPath -or -not (Test-Path $TranscriptPath)) { return $false }
   $journal = "$Brain\projects\$Slug\journal.md"
@@ -190,14 +239,8 @@ function Invoke-Capture {
   if ($journalText) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm"
     $branchTag = if ($branch -and $branch -ne "HEAD") { " - branch: $branch" } else { "" }
-    $partialTag = if ($Partial) { " (partial)" } else { "" }
-    $entry = "## $ts - session $SessionId$partialTag$branchTag`n$journalText`n`n"
-    $existing = Get-Content $journal -Raw
-    $firstEntry = [regex]::Match($existing, '(?m)^## ')
-    if ($firstEntry.Success) {
-      $merged = $existing.Substring(0, $firstEntry.Index) + $entry + $existing.Substring($firstEntry.Index)
-    } else { $merged = $entry + $existing }
-    Set-Content -Path $journal -Value $merged -Encoding utf8
+    $entryText = "## $ts - session $SessionId$branchTag`n$journalText"
+    Set-AutoJournalBlock -JournalPath $journal -SessionId $SessionId -EntryText $entryText
     $wrote = $true
   }
 
@@ -221,6 +264,40 @@ function Invoke-Capture {
   # lesson/feature drafts are a side effect and intentionally do not mark the session summarized.
   return $wrote
   } catch { return $false }
+}
+
+# --- Semantic reindex, shared by Stop (throttled) and SessionEnd (unthrottled). ---
+function Invoke-Reindex {
+  param([string]$Brain, [string]$SessionId, [int]$ThrottleMinutes = 0)
+  if ($ThrottleMinutes -gt 0 -and $SessionId) {
+    $s = Get-SessionScratch -Brain $Brain -SessionId $SessionId
+    if ($s.lastReindexAt) {
+      try {
+        $raw = $s.lastReindexAt
+        $last = if ($raw -is [datetime]) { $raw } else { [datetime]::Parse(("" + $raw)) }
+        if (((Get-Date) - $last) -lt [timespan]::FromMinutes($ThrottleMinutes)) { return }
+      } catch {}
+    }
+  }
+  if ($env:BRAIN_REINDEX_SHIM) {
+    try { Add-Content -Path $env:BRAIN_REINDEX_SHIM -Value (Get-Date -Format o) } catch {}
+  } else {
+    try {
+      $sem = "$Brain\_meta\semantic"
+      $semOn = $true
+      if (Test-Path "$Brain\_meta\engram.json") {
+        $cfg = Get-Content "$Brain\_meta\engram.json" -Raw | ConvertFrom-Json
+        if ($cfg.semantic -and $cfg.semantic.enabled -eq $false) { $semOn = $false }
+      }
+      if ($semOn -and (Test-Path "$sem\reindex.py") -and (Get-Command uv -ErrorAction SilentlyContinue)) {
+        $runArgs = @('run', '--directory', $sem)
+        if (Test-Path "$sem\.env") { $runArgs += @('--env-file', "$sem\.env") }
+        $runArgs += @('python', '-m', 'reindex')
+        & uv @runArgs 2>$null | Out-Null
+      }
+    } catch {}
+  }
+  if ($SessionId) { Set-ScratchFlag -Brain $Brain -SessionId $SessionId -Name "lastReindexAt" -Value (Get-Date -Format o) }
 }
 
 # --- Feature matching: which existing feature note (if any) does this session's work belong to?

@@ -25,24 +25,24 @@ try {
     }
   } catch {}
 
-  $threshold = if ($env:BRAIN_STOP_THRESHOLD) { [int]$env:BRAIN_STOP_THRESHOLD } else { 60 }
+  $first   = if ($env:BRAIN_FIRST_THRESHOLD)   { [int]$env:BRAIN_FIRST_THRESHOLD }   else { 8 }
+  $refresh = if ($env:BRAIN_REFRESH_THRESHOLD) { [int]$env:BRAIN_REFRESH_THRESHOLD } else { 25 }
   $s = Get-SessionScratch -Brain $brain -SessionId $sid
-  $hitThreshold = ([int]$s.turns -ge $threshold)
-  if ($hitThreshold) { Set-ScratchFlag -Brain $brain -SessionId $sid -Name "thresholdHit" -Value $true }
+  $turnThreshold = if ($s.everSummarized) { $refresh } else { $first }
+  $hitThreshold = ([int]$s.turns -ge $turnThreshold)
 
-  # Commit-trigger requires a small minimum of turns since start to avoid noise.
-  $commitTrigger = ($s.committed -and [int]$s.turns -ge 4 -and -not $s.summarized)
+  # Commit-trigger requires a small minimum of turns to avoid noise.
+  $commitTrigger = ($s.committed -and [int]$s.turns -ge 4)
 
   if (($hitThreshold -or $commitTrigger) -and -not $env:BRAIN_NO_SUMMARIZE) {
     $slug = Resolve-Slug -Brain $brain -Cwd $cwd
     if ($slug -and (Test-ShouldSummarize -Brain $brain -SessionId $sid)) {
-      $wrote = Invoke-Capture -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Cwd $cwd -Partial
+      $wrote = Invoke-Capture -Brain $brain -Slug $slug -SessionId $sid -TranscriptPath ("" + $hook.transcript_path) -Cwd $cwd
       if ($wrote) {
-        # Intentionally NOT setting summarized=true — partial entries may repeat across a long
-        # session; only the SessionEnd capture finalizes (sets summarized) to block duplicate fires.
+        Set-ScratchFlag -Brain $brain -SessionId $sid -Name "everSummarized" -Value $true
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "turns" -Value 0
         Set-ScratchFlag -Brain $brain -SessionId $sid -Name "committed" -Value $false
-        Set-ScratchFlag -Brain $brain -SessionId $sid -Name "thresholdHit" -Value $false
+        Invoke-Reindex -Brain $brain -SessionId $sid -ThrottleMinutes 10
       }
     }
   }

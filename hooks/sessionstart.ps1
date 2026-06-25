@@ -3,7 +3,20 @@
 $ErrorActionPreference = "Stop"
 try {
   $raw = [Console]::In.ReadToEnd()
+
   $brain = if ($env:BRAIN_HOME) { $env:BRAIN_HOME } else { "<BRAIN_PATH>" }
+
+  # Prune stale per-session scratch (>14 days). Best-effort; never blocks session start.
+  try {
+    $stateDir = "$brain\_meta\state"
+    if (Test-Path $stateDir) {
+      $cutoff = (Get-Date).AddDays(-14)
+      Get-ChildItem $stateDir -Filter "session-*.json" -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -lt $cutoff } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+  } catch {}
+
   $inbox = "$brain\lessons\_inbox"
   if (-not (Test-Path $inbox)) { exit 0 }
   $drafts = @(Get-ChildItem $inbox -Filter *.md -ErrorAction SilentlyContinue)

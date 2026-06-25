@@ -36,24 +36,7 @@ try {
     & $log "captured: $slug ($sid)"
   } else { & $log "bail: no entry written ($slug $sid)"; exit 0 }
 
-  # Auto-reindex the semantic index so it tracks the vault (the journal entry just written, plus any
-  # edits this session made, land before the next auto-recall). Best-effort; honors the semantic
-  # toggle and no-ops if the index module or uv isn't present. Content-hash cache keeps it cheap.
-  try {
-    $sem = "$brain\_meta\semantic"
-    $semOn = $true
-    if (Test-Path "$brain\_meta\engram.json") {
-      $cfg = Get-Content "$brain\_meta\engram.json" -Raw | ConvertFrom-Json
-      if ($cfg.semantic -and $cfg.semantic.enabled -eq $false) { $semOn = $false }
-    }
-    if ($semOn -and (Test-Path "$sem\reindex.py") -and (Get-Command uv -ErrorAction SilentlyContinue)) {
-      $runArgs = @('run', '--directory', $sem)
-      if (Test-Path "$sem\.env") { $runArgs += @('--env-file', "$sem\.env") }
-      $runArgs += @('python', '-m', 'reindex')
-      $r = (& uv @runArgs 2>$null) -join "`n"
-      & $log ("reindex: $r")
-    }
-  } catch { & $log "reindex error: $($_.Exception.Message)" }
+  try { Invoke-Reindex -Brain $brain -SessionId $sid } catch {}
   exit 0
 } catch {
   exit 0   # never block session end
