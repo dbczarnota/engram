@@ -149,12 +149,17 @@ function Set-AutoJournalBlock {
   if ($rx.IsMatch($existing)) {
     $merged = $rx.Replace($existing, $block, 1)
   } else {
-    $firstEntry = [regex]::Match($existing, '(?m)^## ')
-    if ($firstEntry.Success) {
-      $merged = $existing.Substring(0, $firstEntry.Index) + $block + $existing.Substring($firstEntry.Index)
+    # No block yet for this session. Insert as a sibling, newest-on-top: above any existing
+    # auto block, else above the first manual heading, else prepend. (Never inside another
+    # session's block — that nesting was the bug.)
+    $autoIdx = $existing.IndexOf('<!-- brain:auto session=')
+    if ($autoIdx -ge 0) {
+      $insertAt = $autoIdx
     } else {
-      $merged = $block + $existing
+      $firstEntry = [regex]::Match($existing, '(?m)^## ')
+      $insertAt = if ($firstEntry.Success) { $firstEntry.Index } else { 0 }
     }
+    $merged = $existing.Substring(0, $insertAt) + $block + $existing.Substring($insertAt)
   }
   Set-Content -Path $JournalPath -Value $merged -Encoding utf8
 }
