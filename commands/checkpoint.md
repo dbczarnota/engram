@@ -22,9 +22,13 @@ Write a checkpoint to the brain vault (`<BRAIN_PATH>`) for the CURRENT project.
      `projects/<slug>/features/<name>.md` from `_meta/templates/feature.md` with graph frontmatter.
    - Nothing feature-worthy → skip. Keep `files:` as a single-line JSON array.
 5. Show me the diff of the journal/todos changes (so I can see what was captured).
-6. Commit AND push the checkpoint to the brain vault automatically — no need to ask:
-   `git -C "<BRAIN_PATH>" add -A` then commit with a message like
-   `checkpoint(<slug>): <one-line title>` then `git push origin master` (fast-forward only).
+6. Commit AND push the checkpoint automatically — no need to ask. **Stage ONLY the files THIS
+   checkpoint touched — never `git add -A`** (concurrent sessions may have unrelated unstaged work in
+   the vault that must not be swept into this commit):
+   `git -C "<BRAIN_PATH>" add "projects/<slug>/journal.md" "projects/<slug>/todos.md"` plus any feature
+   note you created or updated under `projects/<slug>/features/` (add each such path explicitly).
+   Then commit with a message like `checkpoint(<slug>): <one-line title>` and push the CURRENT branch:
+   `git -C "<BRAIN_PATH>" push origin HEAD` (fast-forward only).
    The vault has a remote (`origin`); always push after committing.
    If the push is rejected (non-fast-forward) or there is no network, report it and stop — do NOT
    force-push.

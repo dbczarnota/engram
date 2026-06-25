@@ -30,6 +30,18 @@ Assert ($u.Changed -eq $true) "event: adds UserPromptSubmit"
 Assert ($u.Settings['hooks']['UserPromptSubmit'].Count -eq 1) "event: one UserPromptSubmit entry"
 Assert ($u.Settings['hooks']['SessionEnd'].Count -eq 2) "event: SessionEnd untouched"
 
+# matcher: a tool-scoped hook stores its matcher alongside the command
+$pt = Merge-Hook -Settings @{} -EventName 'PostToolUse' -Command 'track.ps1' -Matcher 'Edit|Write|MultiEdit'
+Assert ($pt.Changed -eq $true) "matcher: adds PostToolUse"
+Assert ($pt.Settings['hooks']['PostToolUse'][0]['matcher'] -eq 'Edit|Write|MultiEdit') "matcher: matcher stored"
+Assert ($pt.Settings['hooks']['PostToolUse'][0]['hooks'][0]['command'] -eq 'track.ps1') "matcher: command stored"
+$pt2 = Merge-Hook -Settings $pt.Settings -EventName 'PostToolUse' -Command 'track.ps1' -Matcher 'Edit|Write|MultiEdit'
+Assert ($pt2.Changed -eq $false) "matcher: idempotent on same command"
+
+# lifecycle hook (no matcher) omits the matcher key
+$lc = Merge-Hook -Settings @{} -EventName 'Stop' -Command 'stop.ps1'
+Assert (-not $lc.Settings['hooks']['Stop'][0].ContainsKey('matcher')) "no-matcher: matcher key absent"
+
 # autoMemoryEnabled: set when absent
 $a = Set-AutoMemoryDisabled -Settings @{}
 Assert ($a.Changed -eq $true) "automem: changed when absent"

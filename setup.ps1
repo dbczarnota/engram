@@ -137,29 +137,33 @@ try {
   }
 } catch { Write-Warning "  step failed: $_" }
 
-# [5/9] SessionEnd capture hook + UserPromptSubmit auto-recall hook
-Step "[5/9] Register hooks in settings.json (capture + auto-recall)"
+# [5/9] Register the memory-loop hooks in settings.json
+Step "[5/9] Register hooks in settings.json (memory loop + auto-recall)"
+# The harness the vault actually runs wires FIVE events — not just SessionEnd. SessionEnd never fires
+# in the VS Code extension (the backend is hard-killed, not gracefully exited), so `Stop` drives the
+# capture there (upsert one journal block per session); `PostToolUse` tracks edited files and strips
+# the auto block on /checkpoint; `SessionStart` reminds about lesson drafts and prunes stale scratch.
+# Registering only SessionEnd would leave a VS Code user with no auto-journal at all.
 try {
   $settingsPath = Join-Path $ConfigRoot 'settings.json'
-  $hookCmd = "pwsh -NoProfile -File ""$BrainPath\hooks\capture.ps1"""
-  $settings = Read-Settings $settingsPath
-  $res = Merge-Hook -Settings $settings -EventName 'SessionEnd' -Command $hookCmd
-  if (-not $res.Changed) { Write-Host "  capture hook already configured [ok]" }
-  else {
-    Write-Host "  Will add SessionEnd capture hook:`n    $hookCmd"
-    if (Confirm-Step "Add to settings.json?") {
-      Backup-File $settingsPath; Write-Settings $settingsPath $res.Settings; Write-Host "  applied [ok]"
-    } else { Write-Host "  skipped" }
-  }
-
-  $arCmd = "pwsh -NoProfile -File ""$BrainPath\hooks\autorecall.ps1"""
-  $settings = Read-Settings $settingsPath
-  $resAr = Merge-Hook -Settings $settings -EventName 'UserPromptSubmit' -Command $arCmd
-  if (-not $resAr.Changed) { Write-Host "  auto-recall hook already configured [ok]" }
-  else {
-    Write-Host "  Will add UserPromptSubmit auto-recall hook:`n    $arCmd"
-    if (Confirm-Step "Add auto-recall hook to settings.json?") {
-      Backup-File $settingsPath; Write-Settings $settingsPath $resAr.Settings; Write-Host "  applied [ok]"
+  $hookSpecs = @(
+    @{ Event = 'Stop';             Script = 'stop.ps1';              Matcher = $null },
+    @{ Event = 'SessionEnd';       Script = 'capture.ps1';           Matcher = $null },
+    @{ Event = 'SessionStart';     Script = 'sessionstart.ps1';      Matcher = $null },
+    @{ Event = 'PostToolUse';      Script = 'posttooluse-track.ps1'; Matcher = 'Edit|Write|MultiEdit' },
+    @{ Event = 'UserPromptSubmit'; Script = 'autorecall.ps1';        Matcher = $null }
+  )
+  $backedUp = $false
+  foreach ($spec in $hookSpecs) {
+    $settings = Read-Settings $settingsPath
+    $cmd = "pwsh -NoProfile -File ""$BrainPath\hooks\$($spec.Script)"""
+    $res = if ($spec.Matcher) { Merge-Hook -Settings $settings -EventName $spec.Event -Command $cmd -Matcher $spec.Matcher }
+           else               { Merge-Hook -Settings $settings -EventName $spec.Event -Command $cmd }
+    if (-not $res.Changed) { Write-Host "  $($spec.Event) -> $($spec.Script) already configured [ok]"; continue }
+    Write-Host "  Will add $($spec.Event) hook:`n    $cmd"
+    if (Confirm-Step "Add $($spec.Event) hook to settings.json?") {
+      if (-not $backedUp) { Backup-File $settingsPath; $backedUp = $true }
+      Write-Settings $settingsPath $res.Settings; Write-Host "  applied [ok]"
     } else { Write-Host "  skipped" }
   }
 } catch { Write-Warning "  step failed: $_" }

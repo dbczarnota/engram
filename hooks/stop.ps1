@@ -1,6 +1,6 @@
 #requires -Version 7
 # Stop hook: cheap per-turn accumulation (no LLM). On a long-session threshold OR a fresh commit,
-# write a (partial) journal entry via the shared summarizer, then reset the turn counter.
+# upsert the session's journal block via the shared summarizer, then reset the turn counter.
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\capture.lib.ps1"
 try {

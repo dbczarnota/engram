@@ -5,7 +5,8 @@ function Merge-Hook {
   param(
     [hashtable]$Settings,
     [Parameter(Mandatory)][string]$EventName,
-    [Parameter(Mandatory)][string]$Command
+    [Parameter(Mandatory)][string]$Command,
+    [string]$Matcher
   )
   if ($null -eq $Settings) { $Settings = @{} }
   if (-not $Settings.ContainsKey('hooks'))             { $Settings['hooks'] = @{} }
@@ -21,7 +22,9 @@ function Merge-Hook {
     }
   }
 
+  # Tool-scoped events (e.g. PostToolUse) carry a `matcher`; lifecycle events leave it out.
   $newEntry = @{ hooks = @( @{ type = 'command'; command = $Command } ) }
+  if ($Matcher) { $newEntry['matcher'] = $Matcher }
   $Settings['hooks'][$EventName] = @($Settings['hooks'][$EventName]) + $newEntry
   return @{ Settings = $Settings; Changed = $true }
 }
