@@ -150,6 +150,7 @@ try {
     @{ Event = 'Stop';             Script = 'stop.ps1';              Matcher = $null },
     @{ Event = 'SessionEnd';       Script = 'capture.ps1';           Matcher = $null },
     @{ Event = 'SessionStart';     Script = 'sessionstart.ps1';      Matcher = $null },
+    @{ Event = 'SessionStart';     Script = 'apply-superpowers-patches.ps1'; Matcher = $null },
     @{ Event = 'PostToolUse';      Script = 'posttooluse-track.ps1'; Matcher = 'Edit|Write|MultiEdit' },
     @{ Event = 'UserPromptSubmit'; Script = 'autorecall.ps1';        Matcher = $null }
   )
