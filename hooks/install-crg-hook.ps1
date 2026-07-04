@@ -30,7 +30,7 @@ import os, sqlite3, sys
 db = os.path.join(".code-review-graph", "graph.db")
 if not os.path.exists(db):
     sys.exit(0)
-PATS = ("%node_modules%", "%site-packages%", "%.claude%", "%.obsidian%")  # deps, git-worktree copies, vendored editor plugins
+PATS = ("%node_modules%", "%site-packages%", "%.venv%", "%.worktrees%", "%.claude%", "%.obsidian%")  # deps, venvs, git-worktree copies (.worktrees + .claude/worktrees), vendored editor plugins
 where = " OR ".join("file_path LIKE ?" for _ in PATS)
 
 def canon(s):  # "c:\..." -> "C:\..." (upper-case drive letter only)
