@@ -1,3 +1,6 @@
+> **FROZEN SNAPSHOT (2026-07-05).** This repo is no longer updated. It is superseded by
+> the engram2 v2 harness (private) and may return one day as `agent-os-starter`.
+
 # 🧠 Engram — a memory & knowledge vault for Claude Code
 
 *The memory trace for your coding agent.*
