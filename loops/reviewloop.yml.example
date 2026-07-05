@@ -1,0 +1,49 @@
+# Canonical .reviewloop.yml — copy to a target repo's root as `.reviewloop.yml` (gitignore it there;
+# it may hold nothing secret today but keeps the target repo clean). Read by all three loops
+# (review / fix / integrate) + the chain driver. Values below are the proven HeadlinesForge shape.
+
+# Bootstrap the bare fix/integrate worktree before verify (a fresh git worktree has no deps).
+setup:
+  deps: uv sync
+
+# The gate. Each fix must leave lint+typecheck+tests green. `test` is a capability variant: the STRONG
+# path (with Docker/testcontainers) runs by default, degrading to the light slice when Docker is absent.
+verify:
+  lint: ruff check .
+  typecheck: pyright
+  test:
+    requires: docker
+    with: uv run pytest -p no:cacheprovider -q
+    without: uv run pytest -m "not requires_docker" -p no:cacheprovider -q
+
+# Plan C — line-coverage for prod-safe (ON BY DEFAULT). integrate-loop runs this in the bundle worktree,
+# reads coverage.xml, and requires a prod-safe fix's changed prod lines to be test-covered (else it
+# fail-safes the fix DOWN to canary). Omit only if the repo genuinely has no coverage tooling.
+# NOTE: pytest covers backend (Python) only — frontend (TS) fixes have no coverage data, so they
+# fail-safe to canary. That is intended (can't prove a test exercises a changed TS line).
+coverage: uv run pytest --cov=backend --cov-report=xml:coverage.xml -p no:cacheprovider -q
+
+# Adversarial fan-out layers (review-loop routes files to a layer's prompt).
+backend:
+  - backend/**
+frontend:
+  - frontend/**
+
+capabilities:
+  logfire: null
+  db: false
+
+max_iter: 1              # review-loop iterations per run
+budget_tokens: 3000000  # per-run token ceiling (fix-loop + chain fix stage)
+fanout: true
+
+# Human-facing reports (review report, integrate report, needs-human dossiers) go to the VAULT.
+# The machine queue (bug-registry.md) lives at the target-repo root instead (gitignored).
+report_dir: <path-to-vault>/projects/<slug>/loop-reports
+
+# Static-analysis tools (review-loop parses their JSON into findings; file column is populated).
+analysis:
+  ruff: ruff check backend --output-format json
+  pyright: pyright --outputjson
+  eslint: sh -c "cd frontend && npx eslint . --format json"
+  tsc: sh -c "cd frontend && npx tsc -b --pretty false"

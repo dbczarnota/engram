@@ -309,6 +309,10 @@ _meta/engram.json    feature toggles + knobs (semantic, auto-recall)
 _meta/semantic/      optional semantic-search index (Gemini + sqlite-vec); gitignored .env/.index
 commands/            the slash-commands (junctioned to ~/.claude/commands)
 hooks/               SessionEnd capture + UserPromptSubmit auto-recall hooks (+ tests)
+loops/               autonomous code-quality pipeline: review-loop (detect) → fix-loop (fix) →
+                     integrate-loop (tier/bundle) + chain driver; run against any target repo via
+                     its .reviewloop.yml (copy loops/reviewloop.yml.example). Detached-HEAD, gated,
+                     human-in-the-loop — nothing merges/deploys itself.
 standards/  lessons/  research/  projects/  archive/  dashboards/
 ```
 

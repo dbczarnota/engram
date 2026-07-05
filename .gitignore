@@ -26,6 +26,13 @@ _meta/state/capture-usage.jsonl
 skills/**/__pycache__/
 skills/**/.pytest_cache/
 
+# loops — Python pipeline (review/fix/integrate): regenerable caches + uv env
+loops/**/__pycache__/
+loops/**/*.pyc
+loops/**/.pytest_cache/
+loops/**/.ruff_cache/
+loops/**/.venv/
+
 # semantic search (optional) — secrets, regenerable index + uv env
 _meta/semantic/.env
 _meta/semantic/.index/
